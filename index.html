@@ -130,6 +130,17 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .foot { padding-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .82rem; color: var(--muted); }
 .foot .note { flex-basis: 100%; }
 
+.tasks .empty { color: var(--muted); padding: 10px 6px; }
+
+/* Password screen */
+.lock { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: grid; place-items: center; padding: 16px; }
+.lockbox { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px; width: min(420px, 100%); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; }
+.lockbox h1 { font-family: var(--display); font-size: 1.6rem; margin: 0; }
+.lockbox p { margin: 0; color: var(--muted); }
+.lockbox input { font: inherit; font-size: 1.2rem; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.lockbox button { font: inherit; font-weight: 600; font-size: 1.1rem; padding: 12px; border-radius: 10px; border: 0; background: var(--ink); color: var(--panel); cursor: pointer; }
+.lockbox .err { color: var(--now); min-height: 1.2em; }
+
 /* Slideshow */
 .show { position: fixed; inset: 0; z-index: 50; background: #000; cursor: pointer; overflow: hidden; }
 .slide { position: absolute; inset: -4%; opacity: 0; transition: opacity 1.6s ease; background-size: cover; }
@@ -175,7 +186,6 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
     <div class="clock tnum" id="clock">--:--</div>
     <div>
       <div class="date" id="date"></div>
-      <div class="weather tnum">11° polooblačno · popoludní dážď 60 %</div>
     </div>
     <div class="next" aria-live="polite">
       <div class="count tnum" id="nextCount"></div>
@@ -206,17 +216,27 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 
   <aside class="panel todo" aria-label="To-do list">
     <h2>To-do</h2>
-    <div class="tabs"><span class="on">Všetko</span><span>Mato</span><span>Manželka</span><span>Spoločné</span></div>
     <ul class="tasks" id="tasks"></ul>
     <form class="addrow" id="addForm">
       <input id="newTask" type="text" placeholder="Pridať úlohu" aria-label="Nová úloha">
       <button type="submit">Pridať</button>
     </form>
     <div class="foot">
-      <span class="note">Ukážkové dáta. Slideshow sa spustí po <span id="idleS">45</span> s nečinnosti.</span>
+      <button class="ss" id="clearDone" type="button" hidden>Vymazať hotové</button>
       <button class="ss" id="ssBtn" type="button">Slideshow</button>
+      <span class="note"><span id="status">Načítavam kalendár…</span> · slideshow po <span id="idleS">45</span> s nečinnosti</span>
     </div>
   </aside>
+</div>
+
+<div class="lock" id="lock" hidden>
+  <form class="lockbox" id="lockForm">
+    <h1>Rodinný kalendár</h1>
+    <p>Zadaj heslo kalendára. Tablet si ho zapamätá.</p>
+    <input id="pw" type="password" autocomplete="current-password" aria-label="Heslo kalendára">
+    <button type="submit">Odomknúť</button>
+    <p class="err" id="lockErr" aria-live="polite"></p>
+  </form>
 </div>
 
 <div class="show" id="show" hidden>
@@ -233,69 +253,99 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
   const C = { work: 'var(--p-work)', me: 'var(--p-me)', wife: 'var(--p-wife)', fam: 'var(--p-fam)' };
   const WHO = { work: 'Mato práca', me: 'Mato', wife: 'Manželka', fam: 'Spoločné' };
   const IDLE_S = 45;
+  const RELOAD_MIN = 5;
   const $ = id => document.getElementById(id);
   const hm = d => d.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' });
   const key = d => d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
   const sameDay = (a, b) => key(a) === key(b);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+    del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  };
+  const midnight = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-  const now0 = new Date();
-  const today = new Date(now0.getFullYear(), now0.getMonth(), now0.getDate());
-
-  // Today's example events, placed relative to now so the countdown always shows something
-  const base = new Date(now0); base.setMinutes(Math.round(now0.getMinutes() / 15) * 15, 0, 0);
-  const at = m => new Date(base.getTime() + m * 60000);
-  const todays = [
-    { s: at(-240), d: 60, t: 'Plánovanie šprintu', p: 'work' },
-    { s: at(-150), d: 75, t: 'Joga', p: 'wife' },
-    { s: at(-45), d: 60, t: 'Obsadené', p: 'work', busy: true },
-    { s: at(25), d: 45, t: 'Zubár – Ema', p: 'fam', imp: true, where: 'Hlavná 12' },
-    { s: at(120), d: 30, t: 'Vyzdvihnúť balík', p: 'wife' },
-    { s: at(195), d: 60, t: 'Tréning – futbal', p: 'me' },
-    { s: at(300), d: 120, t: 'Večera u babky', p: 'fam', imp: true }
-  ].filter(e => sameDay(e.s, today));
-  todays.unshift({ allDay: true, t: 'Vývoz plastov', p: 'fam', imp: true, s: today });
-
-  // Example events for other days, by offset from today: [offset, "HH:MM" or null for all-day, title, person, important]
-  const other = [
-    [-9, '18:00', 'Kino', 'fam'], [-7, '09:00', 'Obsadené', 'work'], [-6, '17:30', 'Plávanie', 'me'], [-5, null, 'Narodeniny – Peťo', 'fam', 1],
-    [-3, '10:00', 'Obsadené', 'work'], [-2, '19:00', 'Kaderníčka', 'wife'], [-1, '16:00', 'Nákup IKEA', 'fam'],
-    [1, '09:00', 'Obsadené', 'work'], [1, '17:00', 'Rodičovské združenie', 'fam', 1], [2, '18:30', 'Kaderníčka', 'wife'],
-    [3, null, 'Výlet Tatry', 'fam'], [3, '07:00', 'Odchod', 'me'], [5, '13:00', 'Obsadené', 'work'], [5, '19:00', 'Kino', 'fam'],
-    [6, '08:00', 'Servis auta', 'me', 1], [8, '10:00', 'Obsadené', 'work'], [8, '14:00', 'Obsadené', 'work'], [8, '18:00', 'Joga', 'wife'],
-    [10, null, 'Mama: meniny', 'wife'], [12, '09:30', 'Pediatrička – Ema', 'fam', 1], [13, '11:00', 'Obsadené', 'work'], [15, '20:00', 'Koncert', 'fam'],
-    [-12, '19:00', 'Joga', 'wife'], [-14, '10:00', 'Obsadené', 'work'], [17, '18:00', 'Tréning – futbal', 'me'], [19, null, 'Dovolenka začína', 'fam', 1]
-  ];
-  const byDay = {};
-  const add = e => { (byDay[key(e.s)] = byDay[key(e.s)] || []).push(e); };
-  todays.forEach(add);
-  other.forEach(([off, time, t, p, imp]) => {
-    const s = new Date(today); s.setDate(s.getDate() + off);
-    if (time) { const [h, m] = time.split(':'); s.setHours(+h, +m); }
-    add({ s, d: 60, t, p, imp: !!imp, allDay: !time, busy: t === 'Obsadené' });
-  });
-  Object.values(byDay).forEach(list => list.sort((a, b) => (b.allDay - a.allDay) || (a.s - b.s)));
-
-  // Current week (Monday first)
-  const start = new Date(today); start.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-  const wEnd = new Date(start); wEnd.setDate(start.getDate() + 6);
-  $('month').textContent = 'Týždeň ' + start.getDate() + '.' + (start.getMonth() !== wEnd.getMonth() ? ' ' + (start.getMonth() + 1) + '.' : '') + ' – ' + wEnd.toLocaleDateString('sk-SK', { day: 'numeric', month: 'long' });
+  // Events: { s: Date, e: Date, allDay, t, p, where, imp, busy }
+  let events = [];
+  let byDay = {};
+  let today = midnight(new Date());
   let selected = today;
-  const cells = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(start); d.setDate(start.getDate() + i);
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'cell';
-    if (d < today) b.classList.add('out');
-    if (i % 7 >= 5) b.classList.add('we');
-    if (sameDay(d, today)) b.classList.add('today');
-    const evs = byDay[key(d)] || [];
-    const vis = sameDay(d, today) ? evs.filter(e => e.allDay || new Date(e.s.getTime() + e.d * 60000) > now0) : evs;
-    const shown = vis.slice(0, 8);
-    b.innerHTML = '<span class="n tnum">' + d.getDate() + '</span>' +
-      shown.map(e => '<span class="ln' + (e.imp ? ' imp' : '') + '" style="--c:' + C[e.p] + '">' + (e.allDay ? '' : hm(e.s) + ' ') + (e.imp ? '! ' : '') + e.t + '</span>').join('') +
-      (vis.length > 8 ? '<span class="more">+' + (vis.length - 8) + ' ďalšie</span>' : '');
-    b.setAttribute('aria-label', d.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' }) + ', ' + evs.length + ' udalostí');
-    b.addEventListener('click', () => { selected = d; renderDay(); });
-    cells.push([b, d]); $('grid').appendChild(b);
+  let cells = [];
+  let demo = false;
+
+  function demoEvents() {
+    const now0 = new Date();
+    const base = new Date(now0); base.setMinutes(Math.round(now0.getMinutes() / 15) * 15, 0, 0);
+    const at = (m, d) => ({ s: new Date(base.getTime() + m * 60000), e: new Date(base.getTime() + (m + d) * 60000) });
+    const list = [
+      { ...at(-240, 60), t: 'Plánovanie šprintu', p: 'work' },
+      { ...at(-150, 75), t: 'Joga', p: 'wife' },
+      { ...at(25, 45), t: 'Zubár – Ema', p: 'fam', imp: true, where: 'Hlavná 12' },
+      { ...at(120, 30), t: 'Vyzdvihnúť balík', p: 'wife' },
+      { ...at(300, 120), t: 'Večera u babky', p: 'fam', imp: true }
+    ].filter(e => sameDay(e.s, today));
+    const day = off => { const d = new Date(today); d.setDate(d.getDate() + off); return d; };
+    list.push({ s: day(0), e: day(1), allDay: true, t: 'Vývoz plastov', p: 'fam', imp: true });
+    [[1, '17:00', 'Rodičovské združenie', 'fam', 1], [2, '18:30', 'Kaderníčka', 'wife'], [3, '07:00', 'Výlet Tatry', 'me'],
+     [5, '19:00', 'Kino', 'fam'], [6, '08:00', 'Servis auta', 'me', 1], [-2, '19:00', 'Kaderníčka', 'wife'], [-5, '10:00', 'Obsadené', 'work']]
+      .forEach(([off, time, t, p, imp]) => {
+        const s = day(off); const [h, m] = time.split(':'); s.setHours(+h, +m);
+        list.push({ s, e: new Date(s.getTime() + 3600000), t, p, imp: !!imp, busy: t === 'Obsadené' });
+      });
+    return list;
+  }
+
+  function fromData(d) {
+    const date = v => { const [y, m, dd] = v.split('-').map(Number); return new Date(y, m - 1, dd); };
+    return d.events.map(x => ({
+      s: x.a ? date(x.s) : new Date(x.s),
+      e: x.a ? date(x.e) : new Date(x.e),
+      allDay: !!x.a, t: x.t, p: C[x.p] ? x.p : 'fam', where: x.loc, imp: !!x.imp,
+      busy: /^(obsaden|busy)/i.test(x.t || '')
+    }));
+  }
+
+  function index() {
+    byDay = {};
+    const add = (d, e) => { (byDay[key(d)] = byDay[key(d)] || []).push(e); };
+    events.forEach(e => {
+      if (e.allDay) {
+        for (let d = new Date(e.s); d < e.e; d.setDate(d.getDate() + 1)) add(d, e);
+        if (e.e <= e.s) add(e.s, e);
+      } else {
+        // Timed events spanning midnight show on each day they touch
+        for (let d = midnight(e.s); d < e.e || sameDay(d, e.s); d.setDate(d.getDate() + 1)) add(new Date(d), e);
+      }
+    });
+    Object.values(byDay).forEach(list => list.sort((a, b) => (b.allDay - a.allDay) || (a.s - b.s)));
+  }
+
+  const isNow = (e, n) => !e.allDay && e.e > n;
+
+  function renderWeek() {
+    const n = new Date();
+    const start = new Date(today); start.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const wEnd = new Date(start); wEnd.setDate(start.getDate() + 6);
+    $('month').textContent = 'Týždeň ' + start.getDate() + '.' + (start.getMonth() !== wEnd.getMonth() ? ' ' + (start.getMonth() + 1) + '.' : '') + ' – ' + wEnd.toLocaleDateString('sk-SK', { day: 'numeric', month: 'long' });
+    $('grid').innerHTML = '';
+    cells = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'cell';
+      if (d < today) b.classList.add('out');
+      if (i >= 5) b.classList.add('we');
+      if (sameDay(d, today)) b.classList.add('today');
+      const evs = byDay[key(d)] || [];
+      const vis = sameDay(d, today) ? evs.filter(e => e.allDay || e.e > n) : evs;
+      const shown = vis.slice(0, 8);
+      b.innerHTML = '<span class="n tnum">' + d.getDate() + '</span>' +
+        shown.map(e => '<span class="ln' + (e.imp ? ' imp' : '') + '" style="--c:' + C[e.p] + '">' + (e.allDay || !sameDay(e.s, d) ? '' : hm(e.s) + ' ') + (e.imp ? '! ' : '') + esc(e.t) + '</span>').join('') +
+        (vis.length > 8 ? '<span class="more">+' + (vis.length - 8) + ' ďalšie</span>' : '');
+      b.setAttribute('aria-label', d.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' }) + ', ' + evs.length + ' udalostí');
+      b.addEventListener('click', () => { selected = d; renderDay(); });
+      cells.push([b, d]); $('grid').appendChild(b);
+    }
   }
 
   function renderDay() {
@@ -304,83 +354,19 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
     $('dayTitle').textContent = isToday ? 'Dnes' : selected.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
     const n = new Date();
     const evs = byDay[key(selected)] || [];
-    const nx = isToday ? evs.find(e => !e.allDay && !e.busy && new Date(e.s.getTime() + e.d * 60000) > n) : null;
+    const nx = isToday ? evs.find(e => isNow(e, n) && !e.busy) : null;
     $('evrow').innerHTML = evs.length ? evs.map(e => {
-      const end = new Date(e.s.getTime() + e.d * 60000);
-      const past = isToday && !e.allDay && end < n;
+      const past = isToday && !e.allDay && e.e < n;
       return '<div class="ev' + (past ? ' past' : '') + (e === nx ? ' nextup' : '') + '" style="--c:' + C[e.p] + '">' +
         (e === nx ? '<span class="badge">Najbližšie</span>' : '') +
-        '<div class="tm tnum">' + (e.allDay ? 'Celý deň' : hm(e.s) + '–' + hm(end)) + '</div>' +
-        '<div class="tt">' + (e.imp ? '! ' : '') + e.t + '</div><div class="who">' + WHO[e.p] + (e.where ? ' · ' + e.where : '') + '</div></div>';
+        '<div class="tm tnum">' + (e.allDay ? 'Celý deň' : hm(e.s) + '–' + hm(e.e)) + '</div>' +
+        '<div class="tt">' + (e.imp ? '! ' : '') + esc(e.t) + '</div><div class="who">' + WHO[e.p] + (e.where ? ' · ' + esc(e.where) : '') + '</div></div>';
     }).join('') : '<div class="empty">Žiadne udalosti</div>';
     const focus = $('evrow').querySelector('.nextup');
     $('evrow').scrollLeft = focus ? focus.offsetLeft - $('evrow').firstElementChild.offsetLeft : 0;
   }
 
-  // To-do
-  const tasks = [
-    { t: 'Zaplatiť škôlku', who: 'Spoločné', due: true },
-    { t: 'Vyložiť kontajner na plasty', who: 'Mato', due: true },
-    { t: 'Kúpiť mlieko a chlieb', who: 'Manželka' },
-    { t: 'Objednať servis auta', who: 'Mato' },
-    { t: 'Darček pre Peťa', who: 'Spoločné' },
-    { t: 'Zavolať opravára práčky', who: 'Mato', done: true }
-  ];
-  let tid = 0;
-  function addTask(t) {
-    const li = document.createElement('li'); const id = 'task' + (tid++);
-    li.innerHTML = '<label for="' + id + '"><input type="checkbox" id="' + id + '"' + (t.done ? ' checked' : '') + '><span class="t"></span></label>';
-    const span = li.querySelector('.t');
-    span.textContent = t.t;
-    if (t.due) span.insertAdjacentHTML('beforeend', '<span class="due">dnes</span>');
-    span.insertAdjacentHTML('beforeend', '<span class="who"></span>');
-    span.querySelector('.who').textContent = t.who;
-    $('tasks').appendChild(li);
-  }
-  tasks.forEach(addTask);
-  $('addForm').addEventListener('submit', e => {
-    e.preventDefault(); const v = $('newTask').value.trim(); if (!v) return;
-    addTask({ t: v, who: 'Spoločné' }); $('newTask').value = '';
-  });
-
-  function fmtIn(min) {
-    if (min < 1) return 'Teraz';
-    if (min < 60) return 'o ' + min + ' min';
-    const h = Math.floor(min / 60), m = min % 60;
-    return 'o ' + h + ' h' + (m ? ' ' + m + ' min' : '');
-  }
-
-  function tick() {
-    const n = new Date();
-    $('clock').textContent = hm(n); $('ssClock').textContent = hm(n);
-    $('date').textContent = n.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
-    const nx = todays.find(e => !e.allDay && !e.busy && new Date(e.s.getTime() + e.d * 60000) > n);
-    if (nx) {
-      const min = Math.max(0, Math.round((nx.s - n) / 60000));
-      const c = nx.s <= n ? 'Teraz' : fmtIn(min);
-      $('nextCount').textContent = c; $('nextWhat').textContent = nx.t;
-      $('nextMeta').textContent = hm(nx.s) + ' · ' + WHO[nx.p] + (nx.where ? ' · ' + nx.where : '');
-      $('ssNext').textContent = c.charAt(0).toUpperCase() + c.slice(1) + ': ' + nx.t;
-    } else {
-      $('nextCount').textContent = 'Dnes už nič'; $('nextWhat').textContent = 'Pekný večer'; $('nextMeta').textContent = '';
-      $('ssNext').textContent = 'Dnes už nič v kalendári';
-    }
-    if (sameDay(selected, today)) renderDay();
-  }
-  renderDay(); tick(); setInterval(tick, 15000);
-
-  // Slideshow with generated example "photos"
-  const scenes = [
-    'radial-gradient(circle at 70% 30%, #ffd9a0 0 8%, transparent 9%), linear-gradient(#f6a96b, #d9667a 45%, #3b3557 46%, #1f2440)',
-    'radial-gradient(ellipse at 30% 110%, #2f6b3f 0 40%, transparent 41%), radial-gradient(ellipse at 80% 115%, #24532f 0 45%, transparent 46%), linear-gradient(#9cc9e8, #e6f1f7 60%, #6f9b6e 61%)',
-    'linear-gradient(160deg, transparent 55%, #e9eef2 55% 70%, transparent 70%), linear-gradient(#5d7fa8, #a9c1d9 50%, #2f5a7c 51%, #18344d)',
-    'radial-gradient(circle at 25% 25%, #fff3c4 0 6%, transparent 7%), linear-gradient(135deg, #e8b44c, #c4573a 60%, #6b2a3a)'
-  ];
-  const show = $('show');
-  const slides = scenes.map(bg => { const s = document.createElement('div'); s.className = 'slide'; s.style.backgroundImage = bg; show.insertBefore(s, show.firstChild); return s; });
-  let si = 0, sTimer = null, idleTimer = null;
-  function next() { slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
-  (function buildSsMonth() {
+  function buildSsMonth() {
     const f = new Date(today.getFullYear(), today.getMonth(), 1);
     const s = new Date(f); s.setDate(1 - ((f.getDay() + 6) % 7));
     const lastD = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -393,21 +379,142 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
       h += '<span class="' + cls + '">' + d.getDate() + '</span>';
     }
     $('ssMonth').innerHTML = h + '</div>';
-  })();
-  function startShow() { show.hidden = false; next(); sTimer = setInterval(next, 8000); }
+  }
+
+  function render() {
+    index(); renderWeek(); renderDay(); buildSsMonth(); tick();
+  }
+
+  function fmtIn(min) {
+    if (min < 1) return 'Teraz';
+    if (min < 60) return 'o ' + min + ' min';
+    const h = Math.floor(min / 60), m = min % 60;
+    return 'o ' + h + ' h' + (m ? ' ' + m + ' min' : '');
+  }
+
+  function tick() {
+    const n = new Date();
+    if (!sameDay(n, today)) { const wasToday = sameDay(selected, today); today = midnight(n); if (wasToday) selected = today; render(); return; }
+    $('clock').textContent = hm(n); $('ssClock').textContent = hm(n);
+    $('date').textContent = n.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
+    const nx = (byDay[key(today)] || []).find(e => isNow(e, n) && !e.busy);
+    if (nx) {
+      const min = Math.max(0, Math.round((nx.s - n) / 60000));
+      const c = nx.s <= n ? 'Teraz' : fmtIn(min);
+      $('nextCount').textContent = c; $('nextWhat').textContent = nx.t;
+      $('nextMeta').textContent = hm(nx.s) + ' · ' + WHO[nx.p] + (nx.where ? ' · ' + nx.where : '');
+      $('ssNext').textContent = c.charAt(0).toUpperCase() + c.slice(1) + ': ' + nx.t;
+    } else {
+      $('nextCount').textContent = 'Dnes už nič'; $('nextWhat').textContent = 'Pekný večer'; $('nextMeta').textContent = '';
+      $('ssNext').textContent = 'Dnes už nič v kalendári';
+    }
+    if (sameDay(selected, today)) renderDay();
+  }
+
+  // ---------- calendar data (encrypted, published every 15 min by GitHub Actions) ----------
+  const fromB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  async function decrypt(pass, enc) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+    const k = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: fromB64(enc.salt), iterations: 200000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(enc.iv) }, k, fromB64(enc.ct));
+    return JSON.parse(new TextDecoder().decode(pt));
+  }
+
+  function setStatus(text) { $('status').textContent = text; }
+
+  function apply(d) {
+    demo = false;
+    events = fromData(d);
+    const up = new Date(d.updated);
+    setStatus('Kalendár aktualizovaný ' + (sameDay(up, new Date()) ? '' : up.toLocaleDateString('sk-SK') + ' ') + hm(up) + (d.errors && d.errors.length ? ' · nenačítaný kalendár č. ' + d.errors.join(', ') : ''));
+    render();
+  }
+
+  let pendingEnc = null;
+  function showLock(enc, msg) {
+    pendingEnc = enc;
+    $('lockErr').textContent = msg || '';
+    $('lock').hidden = false;
+    setTimeout(() => $('pw').focus(), 50);
+  }
+  $('lockForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const pass = $('pw').value;
+    if (!pass || !pendingEnc) return;
+    try {
+      const d = await decrypt(pass, pendingEnc);
+      store.set('kal-pass', pass);
+      $('pw').value = ''; $('lock').hidden = true;
+      apply(d);
+    } catch (err) {
+      $('lockErr').textContent = 'Heslo nesedí, skús znova.';
+    }
+  });
+
+  async function load() {
+    let enc = null;
+    try {
+      const res = await fetch('data.enc.json?t=' + Date.now(), { cache: 'no-store' });
+      if (res.ok) enc = await res.json();
+    } catch (e) {}
+    if (!enc) {
+      if (!events.length || demo) {
+        demo = true; events = demoEvents(); render();
+        setStatus('Ukážkové dáta, kalendár ešte nie je pripojený');
+      }
+      return;
+    }
+    const pass = store.get('kal-pass');
+    if (!pass) { if ($('lock').hidden) showLock(enc); else pendingEnc = enc; return; }
+    try { apply(await decrypt(pass, enc)); }
+    catch (e) { store.del('kal-pass'); showLock(enc, 'Heslo sa zmenilo, zadaj ho znova.'); }
+  }
+
+  // ---------- to-do (kept on this tablet) ----------
+  let tasks = [];
+  try { tasks = JSON.parse(store.get('kal-tasks') || '[]'); } catch (e) { tasks = []; }
+  const saveTasks = () => store.set('kal-tasks', JSON.stringify(tasks));
+  function renderTasks() {
+    $('tasks').innerHTML = '';
+    if (!tasks.length) { $('tasks').innerHTML = '<li class="empty">Žiadne úlohy. Pridaj prvú nižšie.</li>'; }
+    tasks.forEach((t, i) => {
+      const li = document.createElement('li'); const id = 'task' + i;
+      li.innerHTML = '<label for="' + id + '"><input type="checkbox" id="' + id + '"' + (t.done ? ' checked' : '') + '><span class="t">' + esc(t.t) + '</span></label>';
+      li.querySelector('input').addEventListener('change', ev => { t.done = ev.target.checked; saveTasks(); $('clearDone').hidden = !tasks.some(x => x.done); });
+      $('tasks').appendChild(li);
+    });
+    $('clearDone').hidden = !tasks.some(x => x.done);
+  }
+  $('addForm').addEventListener('submit', e => {
+    e.preventDefault(); const v = $('newTask').value.trim(); if (!v) return;
+    tasks.push({ t: v, done: false }); saveTasks(); renderTasks(); $('newTask').value = '';
+  });
+  $('clearDone').addEventListener('click', () => { tasks = tasks.filter(t => !t.done); saveTasks(); renderTasks(); });
+  renderTasks();
+
+  // ---------- slideshow with example "photos" ----------
+  const scenes = [
+    'radial-gradient(circle at 70% 30%, #ffd9a0 0 8%, transparent 9%), linear-gradient(#f6a96b, #d9667a 45%, #3b3557 46%, #1f2440)',
+    'radial-gradient(ellipse at 30% 110%, #2f6b3f 0 40%, transparent 41%), radial-gradient(ellipse at 80% 115%, #24532f 0 45%, transparent 46%), linear-gradient(#9cc9e8, #e6f1f7 60%, #6f9b6e 61%)',
+    'linear-gradient(160deg, transparent 55%, #e9eef2 55% 70%, transparent 70%), linear-gradient(#5d7fa8, #a9c1d9 50%, #2f5a7c 51%, #18344d)',
+    'radial-gradient(circle at 25% 25%, #fff3c4 0 6%, transparent 7%), linear-gradient(135deg, #e8b44c, #c4573a 60%, #6b2a3a)'
+  ];
+  const show = $('show');
+  const slides = scenes.map(bg => { const s = document.createElement('div'); s.className = 'slide'; s.style.backgroundImage = bg; show.insertBefore(s, show.firstChild); return s; });
+  let si = 0, sTimer = null, idleTimer = null;
+  function next() { slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
+  function startShow() { if (!$('lock').hidden) return; show.hidden = false; next(); sTimer = setInterval(next, 8000); }
   function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
   function armIdle() { clearTimeout(idleTimer); if (show.hidden) idleTimer = setTimeout(startShow, IDLE_S * 1000); }
   $('idleS').textContent = IDLE_S;
   $('ssBtn').addEventListener('click', e => { e.stopPropagation(); clearTimeout(idleTimer); startShow(); });
   show.addEventListener('click', stopShow);
-  $('fsBtn') && $('fsBtn').addEventListener('click', () => {
-    try {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else { const p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => {}); }
-    } catch (e) {}
-  });
-  document.addEventListener('fullscreenchange', () => { $('fsBtn') && ($('fsBtn').textContent = document.fullscreenElement ? 'Ukončiť celú obrazovku' : 'Celá obrazovka'); });
   ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { if (show.hidden) armIdle(); }, { passive: true }));
+
+  setInterval(tick, 15000);
+  setInterval(load, RELOAD_MIN * 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+  load();
   armIdle();
 })();
 </script>
