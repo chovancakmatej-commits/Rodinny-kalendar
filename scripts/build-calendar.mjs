@@ -23,7 +23,11 @@ function parseCalendars(rows) {
   for (const row of rows) {
     const m = row.match(/(https?|webcal):\/\/\S+/i);
     const word = (m ? row.slice(0, m.index) : row).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
-    const who = PERSON[word] || null;
+    const who = PERSON[word] || (word && (
+      /^(prac|work|job|firm)/.test(word) ? 'work' :
+      /^(manz|zen|wife)/.test(word) ? 'wife' :
+      /^(spol|rodin|fam)/.test(word) ? 'fam' :
+      /^(mat|moj|ja$|me$)/.test(word) ? 'me' : null)) || null;
     if (!m) { pending = who; continue; }
     const p = who || pending || ORDER[out.length] || 'fam';
     out.push({ p, url: m[0], guessed: !who && !pending });
@@ -240,6 +244,7 @@ async function load({ p, url }) {
       });
     }
   }
+  out.total = items.length;
   return out;
 }
 
@@ -259,7 +264,7 @@ for (const [i, cal] of calendars.entries()) {
   try {
     const list = await load(cal);
     events.push(...list);
-    console.log(`::notice::Kalendár ${i + 1} (${LABEL[cal.p]}${cal.guessed ? ', určené podľa poradia' : ''}): ${list.length} udalostí`);
+    console.log(`::notice::Kalendár ${i + 1} (${LABEL[cal.p]}${cal.guessed ? ', určené podľa poradia' : ''}): ${list.length} udalostí (v kalendári spolu ${list.total} záznamov)`);
   } catch (e) {
     // Never print the URL itself, it is a secret
     errors.push(i + 1);
