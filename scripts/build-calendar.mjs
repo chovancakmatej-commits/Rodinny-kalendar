@@ -13,8 +13,27 @@ const DEFAULT_TZ = process.env.CALENDAR_TZ || 'Europe/Bratislava';
 const DAY = 86400000;
 
 const lines = (process.env.CALENDARS || '').split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+const ORDER = ['me', 'wife', 'work', 'fam'];
+const LABEL = { me: 'mato', wife: 'manzelka', work: 'praca', fam: 'spolocne' };
+// Forgiving parsing: "mato <url>", "Mato: <url>", "manželka <url>", the name on its own line above the URL,
+// or just URLs (then assigned in order mato, manzelka, praca, spolocne)
+function parseCalendars(rows) {
+  const out = [];
+  let pending = null;
+  for (const row of rows) {
+    const m = row.match(/(https?|webcal):\/\/\S+/i);
+    const word = (m ? row.slice(0, m.index) : row).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+    const who = PERSON[word] || null;
+    if (!m) { pending = who; continue; }
+    const p = who || pending || ORDER[out.length] || 'fam';
+    out.push({ p, url: m[0], guessed: !who && !pending });
+    pending = null;
+  }
+  return out;
+}
+const calendars = parseCalendars(lines);
 const password = process.env.CALENDAR_PASSWORD || '';
-if (!lines.length || !password) {
+if (!calendars.length || !password) {
   console.log('::warning::CALENDARS alebo CALENDAR_PASSWORD nie je nastavené, aplikácia zostane v ukážkovom režime.');
   process.exit(0);
 }
@@ -191,10 +210,7 @@ function expand(ev) {
 // ---------- build ----------
 function isoDate(ts) { return new Date(ts).toISOString().slice(0, 10); }
 
-async function load(line) {
-  const [who, url] = line.split(/\s+/);
-  const p = PERSON[(who || '').toLowerCase()];
-  if (!p || !url) throw new Error('riadok musí byť "<osoba> <adresa>", osoba = praca | mato | manzelka | spolocne');
+async function load({ p, url }) {
   const res = await fetch(url.replace(/^webcal:/, 'https:'));
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const items = parseIcs(await res.text());
@@ -239,11 +255,11 @@ async function encrypt(obj) {
 
 const events = [];
 const errors = [];
-for (const [i, line] of lines.entries()) {
+for (const [i, cal] of calendars.entries()) {
   try {
-    const list = await load(line);
+    const list = await load(cal);
     events.push(...list);
-    console.log(`::notice::Kalendár ${i + 1}: ${list.length} udalostí`);
+    console.log(`::notice::Kalendár ${i + 1} (${LABEL[cal.p]}${cal.guessed ? ', určené podľa poradia' : ''}): ${list.length} udalostí`);
   } catch (e) {
     // Never print the URL itself, it is a secret
     errors.push(i + 1);
