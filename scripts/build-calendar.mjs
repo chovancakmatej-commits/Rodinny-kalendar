@@ -15,7 +15,7 @@ const DAY = 86400000;
 const lines = (process.env.CALENDARS || '').split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
 const password = process.env.CALENDAR_PASSWORD || '';
 if (!lines.length || !password) {
-  console.log('CALENDARS alebo CALENDAR_PASSWORD nie je nastavené, aplikácia zostane v ukážkovom režime.');
+  console.log('::warning::CALENDARS alebo CALENDAR_PASSWORD nie je nastavené, aplikácia zostane v ukážkovom režime.');
   process.exit(0);
 }
 
@@ -243,11 +243,11 @@ for (const [i, line] of lines.entries()) {
   try {
     const list = await load(line);
     events.push(...list);
-    console.log(`Kalendár ${i + 1}: ${list.length} udalostí`);
+    console.log(`::notice::Kalendár ${i + 1}: ${list.length} udalostí`);
   } catch (e) {
     // Never print the URL itself, it is a secret
     errors.push(i + 1);
-    console.log(`Kalendár ${i + 1}: chyba – ${e.message}`);
+    console.log(`::warning::Kalendár ${i + 1}: chyba – ${e.message}`);
   }
 }
 events.sort((x, y) => (x.s < y.s ? -1 : x.s > y.s ? 1 : 0));
