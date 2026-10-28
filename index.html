@@ -232,6 +232,11 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .ssmonth .mg .has::after { content: ""; position: absolute; left: 50%; bottom: 2px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #ffc56b; }
 .ssmonth .mg .td.has::after { background: #c58410; }
 @media (max-height: 500px) { .ssmonth { display: none; } }
+.slide.photo { background-color: #000; background-position: center; }
+.phbox { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
+.phgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; overflow-y: auto; min-height: 0; max-height: 46dvh; }
+.phgrid div { position: relative; aspect-ratio: 1; border-radius: 8px; background: var(--line) center / cover; }
+.phgrid button { position: absolute; top: 4px; right: 4px; width: 30px; height: 30px; padding: 0; border-radius: 50%; font-size: .9rem; background: rgba(0,0,0,.6); color: #fff; }
 @media (prefers-reduced-motion: reduce) { .slide.on { animation: none; } .slide { transition: none; } }
 
 /* Phone: let the page scroll instead of squeezing the calendar to nothing */
@@ -309,6 +314,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     <div class="foot">
       <button class="ss" id="clearDone" type="button" hidden>Vymazať hotové</button>
       <button class="ss" id="ssBtn" type="button">Slideshow</button>
+      <button class="ss" id="phBtn" type="button">Fotky</button>
       <span class="note"><span id="status">Načítavam kalendár…</span> · slideshow po <span id="idleS">45</span> s nečinnosti</span>
     </div>
   </aside>
@@ -335,10 +341,21 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   </form>
 </div>
 
+<div class="lock" id="phDlg" hidden>
+  <div class="lockbox phbox">
+    <h1>Fotky do slideshow</h1>
+    <p id="phInfo"></p>
+    <div class="phgrid" id="phGrid"></div>
+    <input type="file" id="phFile" accept="image/*" multiple hidden>
+    <div class="row"><button type="button" id="phAdd">Pridať fotky</button><button type="button" class="sec" id="phClose">Hotovo</button></div>
+    <button type="button" class="sec" id="phClear" hidden>Odstrániť všetky fotky</button>
+  </div>
+</div>
+
 <div class="undo" id="undo" hidden role="status"><span id="undoText"></span><button type="button" id="undoBtn">Späť</button></div>
 
 <div class="show" id="show" hidden>
-  <div class="cap">Ukážkové „fotky“ · dotykom späť na kalendár</div>
+  <div class="cap" id="ssCap">Ukážkové „fotky“ · dotykom späť na kalendár</div>
   <div class="ssmonth" id="ssMonth"></div>
   <div class="ov">
     <div class="bigclock tnum" id="ssClock"></div>
@@ -974,7 +991,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   setInterval(loadTodoist, 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadTodoist(); });
 
-  // ---------- slideshow with example "photos" ----------
+  // ---------- slideshow: family photos picked on this device (kept in IndexedDB), example scenes until then ----------
   const scenes = [
     'radial-gradient(circle at 70% 30%, #ffd9a0 0 8%, transparent 9%), linear-gradient(#f6a96b, #d9667a 45%, #3b3557 46%, #1f2440)',
     'radial-gradient(ellipse at 30% 110%, #2f6b3f 0 40%, transparent 41%), radial-gradient(ellipse at 80% 115%, #24532f 0 45%, transparent 46%), linear-gradient(#9cc9e8, #e6f1f7 60%, #6f9b6e 61%)',
@@ -982,10 +999,82 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     'radial-gradient(circle at 25% 25%, #fff3c4 0 6%, transparent 7%), linear-gradient(135deg, #e8b44c, #c4573a 60%, #6b2a3a)'
   ];
   const show = $('show');
-  const slides = scenes.map(bg => { const s = document.createElement('div'); s.className = 'slide'; s.style.backgroundImage = bg; show.insertBefore(s, show.firstChild); return s; });
-  let si = 0, sTimer = null, idleTimer = null;
+  let slides = [], photos = [];   // photos: { id, url }
+  function buildSlides() {
+    slides.forEach(s => s.remove());
+    const list = photos.length ? photos.map(p => 'url("' + p.url + '")').sort(() => Math.random() - .5) : scenes;
+    slides = list.map(bg => {
+      const s = document.createElement('div'); s.className = 'slide' + (photos.length ? ' photo' : '');
+      s.style.backgroundImage = bg; show.insertBefore(s, show.firstChild); return s;
+    });
+    $('ssCap').hidden = photos.length > 0;
+    si = 0;
+  }
+  const db = new Promise((res, rej) => {
+    try {
+      const r = indexedDB.open('kal-photos', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('photos', { keyPath: 'id', autoIncrement: true });
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    } catch (e) { rej(e); }
+  });
+  async function dbDo(mode, fn) {
+    const d = await db;
+    return new Promise((res, rej) => {
+      const tx = d.transaction('photos', mode), st = tx.objectStore('photos'); let out;
+      const r = fn(st); if (r) r.onsuccess = () => { out = r.result; };
+      tx.oncomplete = () => res(out); tx.onerror = () => rej(tx.error);
+    });
+  }
+  async function loadPhotos() {
+    try {
+      const rows = await dbDo('readonly', st => st.getAll()) || [];
+      photos.forEach(p => URL.revokeObjectURL(p.url));
+      photos = rows.map(r => ({ id: r.id, url: URL.createObjectURL(r.blob) }));
+    } catch (e) { photos = []; }
+    buildSlides(); renderPhotos();
+  }
+  // Shrink to screen size so hundreds of photos fit on the tablet
+  async function shrink(file) {
+    const img = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const k = Math.min(1, 2304 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); img.close && img.close();
+    return new Promise(res => c.toBlob(res, 'image/jpeg', .85));
+  }
+  function renderPhotos() {
+    $('phInfo').textContent = photos.length
+      ? photos.length + ' ' + (photos.length === 1 ? 'fotka' : photos.length < 5 ? 'fotky' : 'fotiek') + ' v tomto zariadení. Slideshow ich strieda náhodne.'
+      : 'Zatiaľ žiadne fotky. Vyber ich z galérie tabletu, uložia sa len v tomto zariadení.';
+    $('phClear').hidden = !photos.length;
+    $('phGrid').innerHTML = '';
+    photos.forEach(p => {
+      const d = document.createElement('div'); d.style.backgroundImage = 'url("' + p.url + '")';
+      const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Odstrániť fotku');
+      x.addEventListener('click', async () => { await dbDo('readwrite', st => st.delete(p.id)); loadPhotos(); });
+      d.appendChild(x); $('phGrid').appendChild(d);
+    });
+  }
+  $('phBtn').addEventListener('click', () => { renderPhotos(); $('phDlg').hidden = false; });
+  $('phClose').addEventListener('click', () => { $('phDlg').hidden = true; armIdle(); });
+  $('phAdd').addEventListener('click', () => $('phFile').click());
+  $('phFile').addEventListener('change', async e => {
+    const files = [...e.target.files]; e.target.value = '';
+    let n = 0;
+    for (const f of files) {
+      $('phInfo').textContent = 'Ukladám ' + (++n) + ' / ' + files.length + '…';
+      try { const blob = await shrink(f); if (blob) await dbDo('readwrite', st => st.add({ blob, added: Date.now() })); } catch (err) {}
+    }
+    loadPhotos();
+  });
+  $('phClear').addEventListener('click', async () => {
+    if (!confirm('Odstrániť všetky fotky zo slideshow?')) return;
+    await dbDo('readwrite', st => st.clear()); loadPhotos();
+  });
+  let si = 0;
+  let sTimer = null, idleTimer = null;
+  buildSlides(); loadPhotos();
   function next() { slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
-  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden) return; show.hidden = false; next(); sTimer = setInterval(next, 8000); }
+  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden) return; show.hidden = false; next(); sTimer = setInterval(next, 8000); }
   function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
   function armIdle() { clearTimeout(idleTimer); if (show.hidden) idleTimer = setTimeout(startShow, IDLE_S * 1000); }
   $('idleS').textContent = IDLE_S;
