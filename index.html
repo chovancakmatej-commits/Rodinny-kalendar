@@ -97,7 +97,8 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .calhead .ctrl button { font: inherit; font-size: .9rem; font-weight: 600; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 6px 12px; min-width: 38px; cursor: pointer; }
 .calhead .ctrl button:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
 .calhead .seg { display: inline-flex; }
-.calhead .seg button:first-child { border-radius: 999px 0 0 999px; }
+.calhead .seg button { border-radius: 0; margin-left: -1px; }
+.calhead .seg button:first-child { border-radius: 999px 0 0 999px; margin-left: 0; }
 .calhead .seg button:last-child { border-radius: 0 999px 999px 0; margin-left: -1px; }
 .calhead .seg button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
 .grid.month .cell { padding: 4px 6px 3px; gap: 2px; }
@@ -144,6 +145,20 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .foot .note { flex-basis: 100%; }
 
 .tasks .empty { color: var(--muted); padding: 10px 6px; }
+.todohead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.todohead h2 { margin-bottom: 10px; }
+button.link { font: inherit; font-size: .8rem; color: var(--muted); background: none; border: 0; padding: 4px 0; cursor: pointer; text-decoration: underline; }
+.lockbox .row { display: flex; gap: 8px; }
+.lockbox .row button { flex: 1; }
+.lockbox button.sec { background: none; color: var(--ink); border: 1px solid var(--line); }
+.tasks .meta { display: block; font-size: .8rem; color: var(--muted); }
+.tasks .meta .late { color: var(--now); font-weight: 700; }
+.tasks .t.imp { font-weight: 700; }
+.tasks .t.imp::before { content: "! "; color: var(--p-fam); }
+.board { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; align-content: start; }
+.board section { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.board h3 { font-family: var(--display); font-size: 1rem; margin: 0 0 6px; }
+.board .tasks label { padding: 8px 4px; font-size: 1rem; }
 
 /* Password screen */
 .lock { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: grid; place-items: center; padding: 16px; }
@@ -178,8 +193,9 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 @media (max-height: 500px) { .ssmonth { display: none; } }
 @media (prefers-reduced-motion: reduce) { .slide.on { animation: none; } .slide { transition: none; } }
 
-/* Phone in landscape: let the page scroll instead of squeezing the calendar to nothing */
-@media (max-height: 560px) {
+/* Phone: let the page scroll instead of squeezing the calendar to nothing */
+@media (max-height: 560px), (max-width: 820px) {
+  html, body { height: auto; overflow: auto; }
   .app { height: auto; min-height: 100%; overflow: visible; grid-template-rows: auto auto auto; }
   .cal { min-height: 380px; }
   .todo { min-height: 320px; }
@@ -225,13 +241,14 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
         <button type="button" id="prevBtn" aria-label="Predchádzajúce obdobie">‹</button>
         <button type="button" id="todayBtn">Dnes</button>
         <button type="button" id="nextBtn" aria-label="Nasledujúce obdobie">›</button>
-        <span class="seg"><button type="button" id="viewWeek">Týždeň</button><button type="button" id="viewMonth">Mesiac</button></span>
+        <span class="seg"><button type="button" id="viewWeek">Týždeň</button><button type="button" id="viewMonth">Mesiac</button><button type="button" id="viewTasks">Úlohy</button></span>
       </div>
     </div>
     <div class="grid-wrap">
       <div class="wk"><div>Po</div><div>Ut</div><div>St</div><div>Št</div><div>Pi</div><div>So</div><div>Ne</div></div>
       <div class="grid" id="grid"></div>
     </div>
+    <div class="board" id="board" hidden></div>
   </section>
 
   <section class="panel day" aria-label="Udalosti dňa">
@@ -240,7 +257,7 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
   </section>
 
   <aside class="panel todo" aria-label="To-do list">
-    <h2>To-do</h2>
+    <div class="todohead"><h2>To-do</h2><button type="button" class="link" id="tdBtn">Pripojiť Todoist</button></div>
     <ul class="tasks" id="tasks"></ul>
     <form class="addrow" id="addForm">
       <input id="newTask" type="text" placeholder="Pridať úlohu" aria-label="Nová úloha">
@@ -261,6 +278,17 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
     <input id="pw" type="password" autocomplete="current-password" aria-label="Heslo kalendára">
     <button type="submit">Odomknúť</button>
     <p class="err" id="lockErr" aria-live="polite"></p>
+  </form>
+</div>
+
+<div class="lock" id="tdDlg" hidden>
+  <form class="lockbox" id="tdForm">
+    <h1>Todoist</h1>
+    <p>Vlož API token z Todoist (Nastavenia › Integrácie › Pre vývojárov). Uloží sa len v tomto zariadení.</p>
+    <input id="tdToken" type="password" autocomplete="off" aria-label="Todoist API token">
+    <div class="row"><button type="submit">Pripojiť</button><button type="button" class="sec" id="tdCancel">Zrušiť</button></div>
+    <button type="button" class="sec" id="tdOff" hidden>Odpojiť Todoist</button>
+    <p class="err" id="tdErr" aria-live="polite"></p>
   </form>
 </div>
 
@@ -297,7 +325,7 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
   let today = midnight(new Date());
   let selected = today;
   let anchor = today;
-  let view = store.get('kal-view') === 'month' ? 'month' : 'week';
+  let view = ['month', 'tasks'].includes(store.get('kal-view')) ? store.get('kal-view') : 'week';
   let cells = [];
   let demo = false;
 
@@ -353,6 +381,18 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
   function renderWeek() {
     const n = new Date();
     const month = view === 'month';
+    const board = view === 'tasks';
+    document.querySelector('.grid-wrap').hidden = board;
+    $('board').hidden = !board;
+    ['prevBtn', 'todayBtn', 'nextBtn'].forEach(id => { $(id).hidden = board; });
+    document.querySelector('.calhead .legend').hidden = board;
+    $('viewTasks').classList.toggle('on', board); $('viewTasks').setAttribute('aria-pressed', String(board));
+    if (board) {
+      $('month').textContent = 'Úlohy';
+      $('viewWeek').classList.remove('on'); $('viewMonth').classList.remove('on');
+      renderBoard();
+      return;
+    }
     let start, days;
     if (month) {
       const f = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
@@ -404,6 +444,7 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
   $('todayBtn').addEventListener('click', () => { anchor = today; selected = today; renderWeek(); renderDay(); });
   $('viewWeek').addEventListener('click', () => setView('week'));
   $('viewMonth').addEventListener('click', () => setView('month'));
+  $('viewTasks').addEventListener('click', () => setView('tasks'));
 
   function renderDay() {
     cells.forEach(([b, d]) => b.classList.toggle('sel', sameDay(d, selected)));
@@ -527,27 +568,131 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
     catch (e) { store.del('kal-pass'); showLock(enc, 'Heslo sa zmenilo, zadaj ho znova.'); }
   }
 
-  // ---------- to-do (kept on this tablet) ----------
-  let tasks = [];
-  try { tasks = JSON.parse(store.get('kal-tasks') || '[]'); } catch (e) { tasks = []; }
-  const saveTasks = () => store.set('kal-tasks', JSON.stringify(tasks));
-  function renderTasks() {
-    $('tasks').innerHTML = '';
-    if (!tasks.length) { $('tasks').innerHTML = '<li class="empty">Žiadne úlohy. Pridaj prvú nižšie.</li>'; }
-    tasks.forEach((t, i) => {
-      const li = document.createElement('li'); const id = 'task' + i;
-      li.innerHTML = '<label for="' + id + '"><input type="checkbox" id="' + id + '"' + (t.done ? ' checked' : '') + '><span class="t">' + esc(t.t) + '</span></label>';
-      li.querySelector('input').addEventListener('change', ev => { t.done = ev.target.checked; saveTasks(); $('clearDone').hidden = !tasks.some(x => x.done); });
-      $('tasks').appendChild(li);
-    });
-    $('clearDone').hidden = !tasks.some(x => x.done);
-  }
-  $('addForm').addEventListener('submit', e => {
-    e.preventDefault(); const v = $('newTask').value.trim(); if (!v) return;
-    tasks.push({ t: v, done: false }); saveTasks(); renderTasks(); $('newTask').value = '';
+  // ---------- to-do: Todoist when its key comes with the calendar data, otherwise kept on this device ----------
+  const todo = { token: store.get('kal-todoist'), tasks: [], projects: {}, error: '' };
+  function syncTdBtn() { $('tdBtn').textContent = todo.token ? 'Todoist ✓' : 'Pripojiť Todoist'; }
+  $('tdBtn').addEventListener('click', () => {
+    $('tdErr').textContent = ''; $('tdToken').value = ''; $('tdOff').hidden = !todo.token;
+    $('tdDlg').hidden = false; setTimeout(() => $('tdToken').focus(), 50);
   });
-  $('clearDone').addEventListener('click', () => { tasks = tasks.filter(t => !t.done); saveTasks(); renderTasks(); });
+  $('tdCancel').addEventListener('click', () => { $('tdDlg').hidden = true; });
+  $('tdOff').addEventListener('click', () => {
+    store.del('kal-todoist'); todo.token = null; todo.tasks = []; todo.error = '';
+    $('tdDlg').hidden = true; syncTdBtn(); renderTasks();
+  });
+  $('tdForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const tok = $('tdToken').value.trim(); if (!tok) return;
+    const prev = todo.token; todo.token = tok;
+    try { await td('projects?limit=1'); }
+    catch (err) { todo.token = prev; $('tdErr').textContent = 'Token nefunguje, skontroluj ho.'; return; }
+    store.set('kal-todoist', tok); $('tdDlg').hidden = true; $('tdToken').value = '';
+    syncTdBtn(); loadTodoist();
+  });
+  let local = [];
+  try { local = JSON.parse(store.get('kal-tasks') || '[]'); } catch (e) { local = []; }
+  const saveLocal = () => store.set('kal-tasks', JSON.stringify(local));
+
+  async function td(path, opts) {
+    const r = await fetch('https://api.todoist.com/api/v1/' + path, Object.assign({}, opts, {
+      headers: Object.assign({ Authorization: 'Bearer ' + todo.token }, opts && opts.body ? { 'Content-Type': 'application/json' } : {})
+    }));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.status === 204 ? null : r.json().catch(() => null);
+  }
+  async function tdAll(path) {
+    let out = [], cursor = null;
+    do {
+      const j = await td(path + '?limit=200' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+      out = out.concat(Array.isArray(j) ? j : (j.results || []));
+      cursor = j && j.next_cursor;
+    } while (cursor);
+    return out;
+  }
+  async function loadTodoist() {
+    if (!todo.token) return;
+    try {
+      const [tasks, projects] = await Promise.all([tdAll('tasks'), tdAll('projects')]);
+      todo.projects = Object.fromEntries(projects.map(p => [p.id, p.name]));
+      todo.tasks = tasks.filter(t => !t.checked && !t.is_deleted);
+      todo.error = '';
+    } catch (e) {
+      todo.error = 'Todoist sa nepodarilo načítať (' + e.message + ')';
+    }
+    renderTasks();
+  }
+
+  // Common shape for both sources: { id, t, done, due: Date|null, timed, imp, project }
+  function taskList() {
+    if (!todo.token) return local.map((t, i) => ({ id: 'l' + i, t: t.t, done: t.done, due: null, imp: false, project: 'Úlohy', src: t }));
+    return todo.tasks.map(t => {
+      const dd = t.due && (t.due.datetime || t.due.date);
+      let due = null, timed = false;
+      if (dd) {
+        if (/T/.test(dd)) { due = new Date(dd); timed = true; }
+        else { const [y, m, d] = dd.split('-').map(Number); due = new Date(y, m - 1, d); }
+      }
+      return { id: t.id, t: t.content, done: false, due, timed, imp: t.priority === 4, project: todo.projects[t.project_id] || 'Úlohy', order: t.child_order || t.order || 0 };
+    }).sort((a, b) => ((a.due ? a.due.getTime() : Infinity) - (b.due ? b.due.getTime() : Infinity)) || (b.imp - a.imp) || (a.order - b.order));
+  }
+  function dueLabel(t) {
+    if (!t.due) return '';
+    const d = midnight(t.due), diff = Math.round((d - today) / 86400000);
+    const txt = diff === 0 ? 'dnes' : diff === 1 ? 'zajtra' : diff === -1 ? 'včera' : t.due.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric' });
+    return '<span class="' + (diff < 0 ? 'late' : '') + '">' + txt + (t.timed ? ' ' + hm(t.due) : '') + '</span>';
+  }
+  function taskItem(t, prefix) {
+    const li = document.createElement('li'); const id = prefix + t.id;
+    const meta = [dueLabel(t), todo.token && prefix === 'p' ? esc(t.project) : ''].filter(Boolean).join(' · ');
+    li.innerHTML = '<label for="' + id + '"><input type="checkbox" id="' + id + '"' + (t.done ? ' checked' : '') + '><span class="t' + (t.imp ? ' imp' : '') + '">' + esc(t.t) +
+      (meta ? '<span class="meta">' + meta + '</span>' : '') + '</span></label>';
+    li.querySelector('input').addEventListener('change', ev => complete(t, ev.target.checked));
+    return li;
+  }
+  async function complete(t, done) {
+    if (!todo.token) { t.src.done = done; saveLocal(); renderTasks(); return; }
+    if (!done) return;
+    todo.tasks = todo.tasks.filter(x => x.id !== t.id);
+    setTimeout(renderTasks, 400);
+    try { await td('tasks/' + t.id + '/close', { method: 'POST' }); }
+    catch (e) { todo.error = 'Úlohu sa nepodarilo odškrtnúť v Todoist'; loadTodoist(); }
+  }
+  function renderTasks() {
+    const list = taskList();
+    $('tasks').innerHTML = '';
+    if (todo.error) $('tasks').insertAdjacentHTML('beforeend', '<li class="empty">' + esc(todo.error) + '</li>');
+    if (!list.length) $('tasks').insertAdjacentHTML('beforeend', '<li class="empty">Žiadne úlohy.' + (todo.token ? '' : ' Pridaj prvú nižšie.') + '</li>');
+    list.forEach(t => $('tasks').appendChild(taskItem(t, 'p')));
+    $('clearDone').hidden = !!todo.token || !local.some(x => x.done);
+    if (view === 'tasks') renderBoard();
+  }
+  function renderBoard() {
+    const groups = {};
+    taskList().forEach(t => { (groups[t.project] = groups[t.project] || []).push(t); });
+    $('board').innerHTML = '';
+    const names = Object.keys(groups);
+    if (!names.length) { $('board').innerHTML = '<p class="empty">Žiadne úlohy.</p>'; return; }
+    names.forEach(name => {
+      const sec = document.createElement('section');
+      sec.innerHTML = '<h3>' + esc(name) + '</h3><ul class="tasks"></ul>';
+      groups[name].forEach(t => sec.querySelector('ul').appendChild(taskItem(t, 'b')));
+      $('board').appendChild(sec);
+    });
+  }
+  $('addForm').addEventListener('submit', async e => {
+    e.preventDefault(); const v = $('newTask').value.trim(); if (!v) return;
+    $('newTask').value = '';
+    if (!todo.token) { local.push({ t: v, done: false }); saveLocal(); renderTasks(); return; }
+    try { await td('tasks', { method: 'POST', body: JSON.stringify({ content: v }) }); }
+    catch (err) { todo.error = 'Úlohu sa nepodarilo pridať do Todoist'; }
+    loadTodoist();
+  });
+  $('clearDone').addEventListener('click', () => { local = local.filter(t => !t.done); saveLocal(); renderTasks(); });
+  syncTdBtn();
   renderTasks();
+  loadTodoist();
+  setInterval(loadTodoist, 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadTodoist(); });
 
   // ---------- slideshow with example "photos" ----------
   const scenes = [
@@ -560,7 +705,7 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
   const slides = scenes.map(bg => { const s = document.createElement('div'); s.className = 'slide'; s.style.backgroundImage = bg; show.insertBefore(s, show.firstChild); return s; });
   let si = 0, sTimer = null, idleTimer = null;
   function next() { slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
-  function startShow() { if (!$('lock').hidden) return; show.hidden = false; next(); sTimer = setInterval(next, 8000); }
+  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden) return; show.hidden = false; next(); sTimer = setInterval(next, 8000); }
   function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
   function armIdle() { clearTimeout(idleTimer); if (show.hidden) idleTimer = setTimeout(startShow, IDLE_S * 1000); }
   $('idleS').textContent = IDLE_S;
