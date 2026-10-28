@@ -93,6 +93,19 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .ln.imp { font-weight: 700; }
 .cell .ln { white-space: normal; }
 .more { font-size: .75rem; color: var(--muted); padding-left: 5px; }
+.calhead .ctrl { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.calhead .ctrl button { font: inherit; font-size: .9rem; font-weight: 600; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 6px 12px; min-width: 38px; cursor: pointer; }
+.calhead .ctrl button:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
+.calhead .seg { display: inline-flex; }
+.calhead .seg button:first-child { border-radius: 999px 0 0 999px; }
+.calhead .seg button:last-child { border-radius: 0 999px 999px 0; margin-left: -1px; }
+.calhead .seg button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.grid.month .cell { padding: 4px 6px 3px; gap: 2px; }
+.grid.month .cell .n { font-size: .95rem; width: 26px; height: 26px; }
+.grid.month .ln { display: block; font-size: .76rem; line-height: 1.35; padding: 0 5px; white-space: nowrap; }
+.grid.month .ln + .ln { margin-top: 1px; }
+.grid.month .cell.other { opacity: .45; }
+.grid.month .more { font-size: .7rem; }
 
 /* Day events row */
 .day { grid-area: day; }
@@ -165,6 +178,12 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 @media (max-height: 500px) { .ssmonth { display: none; } }
 @media (prefers-reduced-motion: reduce) { .slide.on { animation: none; } .slide { transition: none; } }
 
+/* Phone in landscape: let the page scroll instead of squeezing the calendar to nothing */
+@media (max-height: 560px) {
+  .app { height: auto; min-height: 100%; overflow: visible; grid-template-rows: auto auto auto; }
+  .cal { min-height: 380px; }
+  .todo { min-height: 320px; }
+}
 @media (max-height: 680px) and (min-width: 821px) {
   .weather { display: none; }
   .ev .who { display: none; }
@@ -201,6 +220,12 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
         <span><i class="dot" style="--c:var(--p-me)"></i>Mato</span>
         <span><i class="dot" style="--c:var(--p-wife)"></i>Manželka</span>
         <span><i class="dot" style="--c:var(--p-fam)"></i>Spoločné</span>
+      </div>
+      <div class="ctrl">
+        <button type="button" id="prevBtn" aria-label="Predchádzajúce obdobie">‹</button>
+        <button type="button" id="todayBtn">Dnes</button>
+        <button type="button" id="nextBtn" aria-label="Nasledujúce obdobie">›</button>
+        <span class="seg"><button type="button" id="viewWeek">Týždeň</button><button type="button" id="viewMonth">Mesiac</button></span>
       </div>
     </div>
     <div class="grid-wrap">
@@ -271,6 +296,8 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
   let byDay = {};
   let today = midnight(new Date());
   let selected = today;
+  let anchor = today;
+  let view = store.get('kal-view') === 'month' ? 'month' : 'week';
   let cells = [];
   let demo = false;
 
@@ -325,28 +352,58 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 
   function renderWeek() {
     const n = new Date();
-    const start = new Date(today); start.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    const wEnd = new Date(start); wEnd.setDate(start.getDate() + 6);
-    $('month').textContent = 'Týždeň ' + start.getDate() + '.' + (start.getMonth() !== wEnd.getMonth() ? ' ' + (start.getMonth() + 1) + '.' : '') + ' – ' + wEnd.toLocaleDateString('sk-SK', { day: 'numeric', month: 'long' });
+    const month = view === 'month';
+    let start, days;
+    if (month) {
+      const f = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+      const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+      start = new Date(f); start.setDate(1 - ((f.getDay() + 6) % 7));
+      days = Math.ceil((((f.getDay() + 6) % 7) + last.getDate()) / 7) * 7;
+      $('month').textContent = f.toLocaleDateString('sk-SK', { month: 'long', year: 'numeric' });
+    } else {
+      start = new Date(anchor); start.setDate(anchor.getDate() - ((anchor.getDay() + 6) % 7));
+      const wEnd = new Date(start); wEnd.setDate(start.getDate() + 6);
+      days = 7;
+      $('month').textContent = 'Týždeň ' + start.getDate() + '.' + (start.getMonth() !== wEnd.getMonth() ? ' ' + (start.getMonth() + 1) + '.' : '') + ' – ' + wEnd.toLocaleDateString('sk-SK', { day: 'numeric', month: 'long' });
+    }
+    $('grid').classList.toggle('month', month);
+    $('viewWeek').classList.toggle('on', !month); $('viewMonth').classList.toggle('on', month);
+    $('viewWeek').setAttribute('aria-pressed', String(!month)); $('viewMonth').setAttribute('aria-pressed', String(month));
+    const maxLines = month ? 3 : 8;
     $('grid').innerHTML = '';
     cells = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < days; i++) {
       const d = new Date(start); d.setDate(start.getDate() + i);
       const b = document.createElement('button'); b.type = 'button'; b.className = 'cell';
       if (d < today) b.classList.add('out');
-      if (i >= 5) b.classList.add('we');
+      if (month && d.getMonth() !== anchor.getMonth()) b.classList.add('other');
+      if (i % 7 >= 5) b.classList.add('we');
       if (sameDay(d, today)) b.classList.add('today');
       const evs = byDay[key(d)] || [];
       const vis = sameDay(d, today) ? evs.filter(e => e.allDay || e.e > n) : evs;
-      const shown = vis.slice(0, 8);
+      const shown = vis.slice(0, maxLines);
       b.innerHTML = '<span class="n tnum">' + d.getDate() + '</span>' +
         shown.map(e => '<span class="ln' + (e.imp ? ' imp' : '') + '" style="--c:' + C[e.p] + '">' + (e.allDay || !sameDay(e.s, d) ? '' : hm(e.s) + ' ') + (e.imp ? '! ' : '') + esc(e.t) + '</span>').join('') +
-        (vis.length > 8 ? '<span class="more">+' + (vis.length - 8) + ' ďalšie</span>' : '');
+        (vis.length > maxLines ? '<span class="more">+' + (vis.length - maxLines) + ' ďalšie</span>' : '');
       b.setAttribute('aria-label', d.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' }) + ', ' + evs.length + ' udalostí');
       b.addEventListener('click', () => { selected = d; renderDay(); });
       cells.push([b, d]); $('grid').appendChild(b);
     }
   }
+
+  function shift(dir) {
+    anchor = view === 'month' ? new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1) : new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + 7 * dir);
+    renderWeek(); renderDay();
+  }
+  function setView(v) {
+    view = v; store.set('kal-view', v); anchor = new Date(selected);
+    renderWeek(); renderDay();
+  }
+  $('prevBtn').addEventListener('click', () => shift(-1));
+  $('nextBtn').addEventListener('click', () => shift(1));
+  $('todayBtn').addEventListener('click', () => { anchor = today; selected = today; renderWeek(); renderDay(); });
+  $('viewWeek').addEventListener('click', () => setView('week'));
+  $('viewMonth').addEventListener('click', () => setView('month'));
 
   function renderDay() {
     cells.forEach(([b, d]) => b.classList.toggle('sel', sameDay(d, selected)));
@@ -394,7 +451,7 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 
   function tick() {
     const n = new Date();
-    if (!sameDay(n, today)) { const wasToday = sameDay(selected, today); today = midnight(n); if (wasToday) selected = today; render(); return; }
+    if (!sameDay(n, today)) { const wasToday = sameDay(selected, today), anchorToday = sameDay(anchor, today); today = midnight(n); if (wasToday) selected = today; if (anchorToday) anchor = today; render(); return; }
     $('clock').textContent = hm(n); $('ssClock').textContent = hm(n);
     $('date').textContent = n.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
     const nx = (byDay[key(today)] || []).find(e => isNow(e, n) && !e.busy);
