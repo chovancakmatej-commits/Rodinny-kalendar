@@ -153,7 +153,11 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 
 .tasks .empty { color: var(--muted); padding: 10px 6px; }
 .todohead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.todohead h2 { margin-bottom: 10px; }
+.ttabs { display: flex; gap: 4px; margin-bottom: 10px; }
+.ttabs button { font: inherit; font-family: var(--display); font-weight: 700; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); background: none; border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.ttabs button.on { background: var(--ink); color: var(--panel); }
+.ttabs button:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
 button.link { font: inherit; font-size: .8rem; color: var(--muted); background: none; border: 0; padding: 4px 0; cursor: pointer; text-decoration: underline; }
 .lockbox .row { display: flex; gap: 8px; }
 .lockbox .row button { flex: 1; }
@@ -175,6 +179,15 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .board .newlist { border-style: dashed; }
 .tasks .sub { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 12px 6px 2px; }
 .tasks li.done .t { text-decoration: line-through; color: var(--muted); }
+.tasks li { position: relative; }
+.tasks li.done label { padding-right: 44px; }
+.tasks .del { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%;
+  border: 0; background: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; }
+.tasks .del:hover, .tasks .del:focus-visible { background: color-mix(in srgb, var(--now) 15%, transparent); color: var(--now); outline: none; }
+.undo { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 55;
+  background: var(--ink); color: var(--panel); border-radius: 999px; padding: 8px 8px 8px 18px; display: flex; gap: 12px; align-items: center; max-width: calc(100vw - 32px); box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.undo span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.undo button { font: inherit; font-weight: 700; border: 0; border-radius: 999px; padding: 8px 14px; background: var(--panel); color: var(--ink); cursor: pointer; }
 .board h3 { font-family: var(--display); font-size: 1rem; margin: 0 0 6px; }
 .board .tasks label { padding: 8px 4px; font-size: 1rem; }
 
@@ -277,7 +290,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   </section>
 
   <aside class="panel todo" aria-label="To-do list">
-    <div class="todohead"><h2>To-do</h2><button type="button" class="link" id="tdBtn">Pripojiť Todoist</button></div>
+    <div class="todohead"><div class="ttabs" role="tablist"><button type="button" role="tab" id="tabOpen">To-do</button><button type="button" role="tab" id="tabDone">Splnené</button></div><button type="button" class="link" id="tdBtn">Pripojiť Todoist</button></div>
     <ul class="tasks" id="tasks"></ul>
     <form class="addrow" id="addForm">
       <input id="newTask" type="text" placeholder="Pridať úlohu" aria-label="Nová úloha">
@@ -311,6 +324,8 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     <p class="err" id="tdErr" aria-live="polite"></p>
   </form>
 </div>
+
+<div class="undo" id="undo" hidden role="status"><span id="undoText"></span><button type="button" id="undoBtn">Späť</button></div>
 
 <div class="show" id="show" hidden>
   <div class="cap">Ukážkové „fotky“ · dotykom späť na kalendár</div>
@@ -738,6 +753,9 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       .sort((a, b) => ((a.due ? a.due.getTime() : Infinity) - (b.due ? b.due.getTime() : Infinity)) || (b.imp - a.imp) || (a.order - b.order));
   }
   function doneList() {
+    return doneAll().filter(t => !removing.has(t.id));
+  }
+  function doneAll() {
     if (!todo.token) return local.filter(t => t.done).map(t => ({ id: 'l' + local.indexOf(t), t: t.t, done: true, due: null, project: 'Úlohy', src: t }));
     // An item that is open again (put back on the list) is not shown twice
     const open = new Set(todo.tasks.map(t => t.project_id + '|' + plain(t.content)));
@@ -765,6 +783,12 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     li.innerHTML = '<label for="' + id + '"><input type="checkbox" id="' + id + '"' + (t.done ? ' checked' : '') + '><span class="t' + (t.imp ? ' imp' : '') + '">' + esc(t.t) +
       (meta ? '<span class="meta">' + meta + '</span>' : '') + '</span></label>';
     li.querySelector('input').addEventListener('change', ev => complete(t, ev.target.checked));
+    if (t.done) {
+      const x = document.createElement('button');
+      x.type = 'button'; x.className = 'del'; x.textContent = '✕'; x.setAttribute('aria-label', 'Odstrániť ' + t.t);
+      x.addEventListener('click', ev => { ev.preventDefault(); remove(t); });
+      li.appendChild(x);
+    }
     return li;
   }
   async function complete(t, done) {
@@ -781,15 +805,50 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     try { await td('tasks/' + t.id + (done ? '/close' : '/reopen'), { method: 'POST' }); }
     catch (e) { todo.error = done ? 'Úlohu sa nepodarilo odškrtnúť v Todoist' : 'Úlohu sa nepodarilo vrátiť späť'; loadTodoist(); }
   }
+  // Removing waits a few seconds so a mistaken tap can be undone
+  const removing = new Set();
+  let undoTimer = null, undoItem = null;
+  function finishRemove() {
+    clearTimeout(undoTimer); $('undo').hidden = true;
+    const t = undoItem; undoItem = null;
+    if (!t) return;
+    removing.delete(t.id);
+    if (!todo.token) { local = local.filter(x => x !== t.src); saveLocal(); renderTasks(); return; }
+    todo.done = todo.done.filter(x => (x.id || x.task_id) !== t.id);
+    td('tasks/' + t.id, { method: 'DELETE' }).catch(() => { todo.error = 'Úlohu sa nepodarilo odstrániť'; loadTodoist(); });
+  }
+  function remove(t) {
+    if (undoItem) finishRemove();
+    undoItem = t; removing.add(t.id);
+    $('undoText').textContent = 'Odstránené: ' + t.t;
+    $('undo').hidden = false;
+    undoTimer = setTimeout(finishRemove, 5000);
+    renderTasks();
+  }
+  $('undoBtn').addEventListener('click', () => {
+    clearTimeout(undoTimer); $('undo').hidden = true;
+    if (undoItem) removing.delete(undoItem.id);
+    undoItem = null; renderTasks();
+  });
+
+  let tab = store.get('kal-tab') === 'done' ? 'done' : 'open';
+  function setTab(v) { tab = v; store.set('kal-tab', v); renderTasks(); }
+  $('tabOpen').addEventListener('click', () => setTab('open'));
+  $('tabDone').addEventListener('click', () => setTab('done'));
   function renderTasks() {
     const list = taskList();
-    const done = doneList().filter(t => !t.doneAt || Date.now() - t.doneAt < 7 * 86400000).slice(0, 15);
+    const done = doneList();
+    $('tabOpen').classList.toggle('on', tab === 'open'); $('tabOpen').setAttribute('aria-selected', String(tab === 'open'));
+    $('tabDone').classList.toggle('on', tab === 'done'); $('tabDone').setAttribute('aria-selected', String(tab === 'done'));
+    $('tabOpen').textContent = 'To-do' + (list.length ? ' ' + list.length : '');
+    $('tabDone').textContent = 'Splnené' + (done.length ? ' ' + done.length : '');
     $('tasks').innerHTML = '';
     if (todo.error) $('tasks').insertAdjacentHTML('beforeend', '<li class="empty">' + esc(todo.error) + '</li>');
-    if (!list.length) $('tasks').insertAdjacentHTML('beforeend', '<li class="empty">Žiadne otvorené úlohy.</li>');
-    list.forEach(t => $('tasks').appendChild(taskItem(t, true)));
-    if (done.length) {
-      $('tasks').insertAdjacentHTML('beforeend', '<li class="sub">Splnené</li>');
+    if (tab === 'open') {
+      if (!list.length) $('tasks').insertAdjacentHTML('beforeend', '<li class="empty">Žiadne otvorené úlohy.</li>');
+      list.forEach(t => $('tasks').appendChild(taskItem(t, true)));
+    } else {
+      if (!done.length) $('tasks').insertAdjacentHTML('beforeend', '<li class="empty">Zatiaľ nič splnené.</li>');
       done.forEach(t => $('tasks').appendChild(taskItem(t, true)));
     }
     $('clearDone').hidden = !!todo.token || !local.some(x => x.done);
