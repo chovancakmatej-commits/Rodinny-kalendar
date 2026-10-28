@@ -317,7 +317,22 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .ssmonth .mg .td { background: #fff; color: #111; font-weight: 700; text-shadow: none; }
 .ssmonth .mg .has::after { content: ""; position: absolute; left: 50%; bottom: 2px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #ffc56b; }
 .ssmonth .mg .td.has::after { background: #c58410; }
-@media (max-height: 500px), (max-width: 700px) { .ssframe { display: none; } .ssmain { left: 50%; width: 92vw; } }
+@media (max-width: 700px) { .ssframe { display: none; } .ssmain { left: 50%; width: 92vw; } }
+/* Phone in landscape: smaller frame and type so the day still fits next to the clock */
+@media (max-height: 500px) and (min-width: 701px) {
+  .ssframe { top: 10px; bottom: 10px; right: max(10px, env(safe-area-inset-right, 0px)); width: 46vw; padding: 10px 12px; gap: 6px; border-radius: 16px; }
+  .ssmain { left: calc((100% - 46vw - 10px) / 2); width: calc(100% - 46vw - 30px); }
+  .show .bigclock { font-size: min(30vh, 15vw); }
+  .ssdate { font-size: 1rem; }
+  .ssrow { margin-top: 8px; gap: 8px 20px; }
+  .sswx .ic { font-size: 2rem; } .sswx .tp { font-size: 1.6rem; } .sswx .sm { font-size: .75rem; }
+  #ssNext { font-size: .95rem; }
+  .sfh { font-size: .9rem; }
+  .sfev { font-size: .78rem; padding: 2px 6px; } .sfev .tm { font-size: .68rem; }
+  .sfcol { gap: 3px; } .sfcol .who { font-size: .62rem; }
+  .sftasks { padding: 6px 10px; } .sftasks li { font-size: .78rem; }
+  .show .cap { display: none; }
+}
 .slide.photo { background-color: #000; background-position: center; }
 .phbox { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
 .phgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; overflow-y: auto; min-height: 0; max-height: 46dvh; }
