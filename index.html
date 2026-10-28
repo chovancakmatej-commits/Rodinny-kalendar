@@ -62,6 +62,13 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .next { margin-left: auto; background: var(--hl-bg); color: var(--hl-ink); border-radius: 12px; padding: 8px 16px; display: flex; align-items: center; gap: 14px; min-width: 0; max-width: 100%; flex-shrink: 1; }
 .next > div:last-child { min-width: 0; }
 .next .what, .next .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Countdown: the coloured fill shrinks from right to left as the current event runs out */
+.next { position: relative; overflow: hidden; isolation: isolate; }
+.next .fill { position: absolute; inset: 0; z-index: -1; transform-origin: left center; transform: scaleX(var(--left, 0));
+  background: color-mix(in srgb, var(--c, var(--p-fam)) 38%, transparent); transition: transform 1s linear; }
+.next .fill::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 3px; background: var(--c, var(--p-fam)); }
+.next.idle .fill { display: none; }
+.next .count small { display: block; font-family: var(--body); font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; opacity: .8; }
 .next .count { font-family: var(--display); font-weight: 700; font-size: 1.5rem; white-space: nowrap; }
 .next .what { font-weight: 600; font-size: 1.05rem; }
 .next .meta { font-size: .85rem; opacity: .85; }
@@ -222,7 +229,8 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     <div>
       <div class="date" id="date"></div>
     </div>
-    <div class="next" aria-live="polite">
+    <div class="next" id="next" aria-live="polite">
+      <div class="fill" id="nextFill"></div>
       <div class="count tnum" id="nextCount"></div>
       <div><div class="what" id="nextWhat"></div><div class="meta" id="nextMeta"></div></div>
     </div>
@@ -490,22 +498,86 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     return 'o ' + h + ' h' + (m ? ' ' + m + ' min' : '');
   }
 
+  // ---------- what is going on right now ----------
+  const plain = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const WHOS = { work: 'Matej', me: 'Matej', wife: 'Manželka', fam: 'Rodina' };
+  function platform(e) {
+    const x = plain(e.where + ' ' + e.t);
+    if (/teams/.test(x)) return 'Teams';
+    if (/zoom/.test(x)) return 'Zoom';
+    if (/meet\.google|google meet/.test(x)) return 'Google Meet';
+    if (/webex/.test(x)) return 'Webex';
+    return null;
+  }
+  // Turns an event into a sentence like "Matej je na meetingu"
+  function describe(e) {
+    const x = plain(e.t + ' ' + (e.where || ''));
+    const who = WHOS[e.p];
+    const rules = [
+      [/dovolenk|vacation|holiday|out of office|\booo\b|\bpto\b/, 'je na dovolenke'],
+      [/\bchat(a|e|u)\b|chalup/, 'je na chate'],
+      [/zubar|lekar|doktor|ambulanc|nemocnic|pediatr|ocn[aey]|zubn/, 'je u lekára'],
+      [/trening|fitnes|\bgym\b|\bbeh\b|futbal|plavan|joga|yoga|tenis|bicyk|squash|hokej/, 'je na tréningu'],
+      [/vecer[au]/, 'je na večeri'],
+      [/obed|lunch/, 'je na obede'],
+      [/letisk|\blet\b|flight|cestuj|\bcesta\b|travel|vlak|presun/, 'je na ceste'],
+      [/skolen|workshop|\bws\s?\d|kurz|konferenc|training/, 'je na školení'],
+      [/focus|sustred|deep work/, 'pracuje sústredene']
+    ];
+    for (const [re, txt] of rules) if (re.test(x)) return who + ' ' + txt;
+    if (e.busy) return who + ' je zaneprázdnený';
+    if (platform(e)) return who + ' je na online meetingu';
+    if (e.p === 'work') return who + ' je na meetingu';
+    return null;
+  }
+  function fmtLeft(min) {
+    if (min < 60) return min + ' min';
+    const h = Math.floor(min / 60), m = min % 60;
+    return h + ' h' + (m ? ' ' + m + ' min' : '');
+  }
+  function renderNow(n) {
+    const todays = byDay[key(today)] || [];
+    // The most recently started timed event wins; an all-day "status" (vacation, cottage) is the fallback
+    const running = todays.filter(e => !e.allDay && e.s <= n && e.e > n).sort((a, b) => b.s - a.s);
+    let cur = running[0];
+    if (!cur) cur = todays.find(e => e.allDay && describe(e));
+    const box = $('next');
+    if (cur) {
+      const head = describe(cur) || cur.t;
+      const left = cur.allDay ? null : Math.max(0, Math.round((cur.e - n) / 60000));
+      const frac = cur.allDay ? 1 : Math.max(0, Math.min(1, (cur.e - n) / (cur.e - cur.s)));
+      const where = platform(cur) || (cur.where ? cur.where.split(/[;,]/)[0] : '');
+      box.classList.remove('idle');
+      box.style.setProperty('--c', C[cur.p]); box.style.setProperty('--left', frac);
+      $('nextCount').innerHTML = cur.allDay ? '<small>dnes</small>celý deň' : '<small>ešte</small>' + fmtLeft(left);
+      $('nextWhat').textContent = head;
+      $('nextMeta').textContent = [head !== cur.t ? cur.t : '', where, cur.allDay ? '' : 'do ' + hm(cur.e), running.length > 1 ? '+' + (running.length - 1) + ' súčasne' : ''].filter(Boolean).join(' · ');
+      $('ssNext').textContent = head + (cur.allDay ? '' : ' · ešte ' + fmtLeft(left));
+      return;
+    }
+    const nx = todays.find(e => !e.allDay && e.s > n);
+    if (nx) {
+      const min = Math.max(0, Math.round((nx.s - n) / 60000));
+      // Within the last hour before it starts, the fill grows towards the start
+      box.classList.toggle('idle', min > 60);
+      box.style.setProperty('--c', C[nx.p]); box.style.setProperty('--left', Math.max(0, 1 - min / 60));
+      $('nextCount').innerHTML = '<small>začína</small>' + fmtIn(min);
+      $('nextWhat').textContent = nx.t;
+      $('nextMeta').textContent = [hm(nx.s), WHO[nx.p], platform(nx) || (nx.where ? nx.where.split(/[;,]/)[0] : '')].filter(Boolean).join(' · ');
+      $('ssNext').textContent = fmtIn(min).replace(/^o/, 'O') + ': ' + nx.t;
+      return;
+    }
+    box.classList.add('idle');
+    $('nextCount').textContent = 'Dnes už nič'; $('nextWhat').textContent = 'Pekný večer'; $('nextMeta').textContent = '';
+    $('ssNext').textContent = 'Dnes už nič v kalendári';
+  }
+
   function tick() {
     const n = new Date();
     if (!sameDay(n, today)) { const wasToday = sameDay(selected, today), anchorToday = sameDay(anchor, today); today = midnight(n); if (wasToday) selected = today; if (anchorToday) anchor = today; render(); return; }
     $('clock').textContent = hm(n); $('ssClock').textContent = hm(n);
     $('date').textContent = n.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
-    const nx = (byDay[key(today)] || []).find(e => isNow(e, n) && !e.busy);
-    if (nx) {
-      const min = Math.max(0, Math.round((nx.s - n) / 60000));
-      const c = nx.s <= n ? 'Teraz' : fmtIn(min);
-      $('nextCount').textContent = c; $('nextWhat').textContent = nx.t;
-      $('nextMeta').textContent = hm(nx.s) + ' · ' + WHO[nx.p] + (nx.where ? ' · ' + nx.where : '');
-      $('ssNext').textContent = c.charAt(0).toUpperCase() + c.slice(1) + ': ' + nx.t;
-    } else {
-      $('nextCount').textContent = 'Dnes už nič'; $('nextWhat').textContent = 'Pekný večer'; $('nextMeta').textContent = '';
-      $('ssNext').textContent = 'Dnes už nič v kalendári';
-    }
+    renderNow(n);
     if (sameDay(selected, today)) renderDay();
   }
 
@@ -713,7 +785,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   show.addEventListener('click', stopShow);
   ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { if (show.hidden) armIdle(); }, { passive: true }));
 
-  setInterval(tick, 15000);
+  setInterval(tick, 10000);
   setInterval(load, RELOAD_MIN * 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
   load();
