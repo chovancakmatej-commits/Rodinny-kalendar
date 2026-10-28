@@ -72,6 +72,19 @@ function zonedToUtc(y, mo, d, h, mi, s, tz) {
 function unescapeText(v) {
   return v.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').trim();
 }
+// Description keeps its line breaks; meeting-invite boilerplate (Teams/Zoom join block) is cut off
+function cleanDescription(v) {
+  let t = v.replace(/\\n/gi, '\n').replace(/\\([,;\\])/g, '$1').replace(/\r/g, '');
+  // Google sends HTML descriptions
+  t = t.replace(/<br\s*\/?>|<\/p>|<\/div>|<\/li>/gi, '\n').replace(/<[a-z\/][^>]*>/gi, '')
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  const cut = t.search(/^.*(_{8,}|-{8,}|Microsoft Teams (meeting|Need help)|Schôdza v aplikácii Microsoft Teams|Join Zoom Meeting|Pripojiť sa k schôdzi).*$/m);
+  if (cut >= 0) t = t.slice(0, cut);
+  t = t.replace(/<(https?:[^>]+)>/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  return t.length > 1200 ? t.slice(0, 1200).trim() + '…' : t;
+}
+const JOIN = /https:\/\/(?:teams\.microsoft\.com\/(?:l\/meetup-join|meet)\/[^\s<>"\\]+|[\w.-]*zoom\.us\/j\/[^\s<>"\\]+|meet\.google\.com\/[a-z-]+|[\w.-]*webex\.com\/[^\s<>"\\]+)/i;
+const personName = p => p ? (p.params.CN || p.value.replace(/^mailto:/i, '')).trim() : '';
 function parseProps(block) {
   const props = [];
   for (const raw of block) {
@@ -121,6 +134,10 @@ function parseIcs(text) {
       uid: get('UID')?.value || '',
       summary: unescapeText(get('SUMMARY')?.value || '(bez názvu)'),
       location: unescapeText(get('LOCATION')?.value || ''),
+      description: cleanDescription(get('DESCRIPTION')?.value || ''),
+      join: ((get('X-MICROSOFT-SKYPETEAMSMEETINGURL')?.value || '') + ' ' + (get('DESCRIPTION')?.value || '') + ' ' + (get('LOCATION')?.value || '') + ' ' + (get('URL')?.value || '')).replace(/\\([,;\\])/g, '$1').match(JOIN)?.[0] || '',
+      organizer: personName(get('ORGANIZER')),
+      attendees: all('ATTENDEE').map(personName).filter(Boolean),
       status: (get('STATUS')?.value || '').toUpperCase(),
       start: parseDate(get('DTSTART')),
       end: parseDate(get('DTEND')),
@@ -240,7 +257,11 @@ async function load({ p, url }) {
         a: ev.start.allDay,
         s: ev.start.allDay ? isoDate(occ.startTs) : new Date(occ.startTs).toISOString(),
         e: ev.start.allDay ? isoDate(occ.endTs) : new Date(occ.endTs).toISOString(),
-        loc: ev.location || undefined
+        loc: ev.location || undefined,
+        d: ev.description || undefined,
+        u: ev.join || undefined,
+        o: ev.organizer || undefined,
+        at: ev.attendees.length ? ev.attendees.slice(0, 40) : undefined
       });
     }
   }

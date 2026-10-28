@@ -201,6 +201,24 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .board h3 { font-family: var(--display); font-size: 1rem; margin: 0 0 6px; }
 .board .tasks label { padding: 8px 4px; font-size: 1rem; }
 
+.ev[data-i] { cursor: pointer; }
+.ev[data-i]:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
+.grid .ln { cursor: pointer; }
+
+/* Event detail */
+.lock.evdlg { background: rgba(0,0,0,.45); }
+.evbox { width: min(560px, 100%); max-height: calc(100dvh - 32px); border-top: 6px solid var(--c); gap: 10px; }
+.evbody { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; -webkit-user-select: text; user-select: text; }
+.evbody .dwho { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--c); }
+.evbody h1 { font-size: 1.45rem; line-height: 1.2; }
+.evbody .dwhen { font-weight: 600; }
+.evbody .dstate { color: var(--now); font-weight: 700; font-size: .9rem; }
+.evbody .dr { display: grid; grid-template-columns: 96px 1fr; gap: 8px; font-size: .95rem; padding-top: 6px; border-top: 1px solid var(--line); }
+.evbody .dl { color: var(--muted); }
+.evbody .join { display: inline-block; margin-left: 8px; font-weight: 700; color: var(--panel); background: var(--c); border-radius: 999px; padding: 3px 12px; text-decoration: none; }
+.evbody .ddesc { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .95rem; padding-top: 8px; border-top: 1px solid var(--line); }
+.evbody .dnone { color: var(--muted); }
+
 /* Password screen */
 .lock { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: grid; place-items: center; padding: 16px; }
 .lockbox { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px; width: min(420px, 100%); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; }
@@ -352,6 +370,13 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   </div>
 </div>
 
+<div class="lock evdlg" id="evDlg" hidden>
+  <div class="lockbox evbox" id="evBox" role="dialog" aria-modal="true" aria-labelledby="evTitle">
+    <div class="evbody" id="evBody"></div>
+    <button type="button" id="evClose">Zavrieť</button>
+  </div>
+</div>
+
 <div class="undo" id="undo" hidden role="status"><span id="undoText"></span><button type="button" id="undoBtn">Späť</button></div>
 
 <div class="show" id="show" hidden>
@@ -419,6 +444,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       s: x.a ? date(x.s) : new Date(x.s),
       e: x.a ? date(x.e) : new Date(x.e),
       allDay: !!x.a, t: x.t, p: C[x.p] ? x.p : 'fam', where: x.loc, imp: !!x.imp,
+      desc: x.d, join: x.u, org: x.o, att: x.at,
       busy: /^(obsaden|busy)/i.test(x.t || '')
     }));
   }
@@ -426,6 +452,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   function index() {
     byDay = {};
     const add = (d, e) => { (byDay[key(d)] = byDay[key(d)] || []).push(e); };
+    events.forEach((e, i) => { e.i = i; });
     events.forEach(e => {
       if (e.allDay) {
         for (let d = new Date(e.s); d < e.e; d.setDate(d.getDate() + 1)) add(d, e);
@@ -485,10 +512,13 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       const vis = sameDay(d, today) ? evs.filter(e => e.allDay || e.e > n) : evs;
       const shown = vis.slice(0, maxLines);
       b.innerHTML = '<span class="n tnum">' + d.getDate() + '</span>' +
-        shown.map(e => '<span class="ln' + (e.imp ? ' imp' : '') + '" style="--c:' + C[e.p] + '">' + (e.allDay || !sameDay(e.s, d) ? '' : hm(e.s) + ' ') + (e.imp ? '! ' : '') + esc(e.t) + '</span>').join('') +
+        shown.map(e => '<span class="ln' + (e.imp ? ' imp' : '') + '" data-i="' + e.i + '" style="--c:' + C[e.p] + '">' + (e.allDay || !sameDay(e.s, d) ? '' : hm(e.s) + ' ') + (e.imp ? '! ' : '') + esc(e.t) + '</span>').join('') +
         (vis.length > maxLines ? '<span class="more">+' + (vis.length - maxLines) + ' ďalšie</span>' : '');
       b.setAttribute('aria-label', d.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' }) + ', ' + evs.length + ' udalostí');
-      b.addEventListener('click', () => { selected = d; renderDay(); });
+      b.addEventListener('click', ev => {
+        selected = d; renderDay();
+        const ln = ev.target.closest('.ln'); if (ln) openEvent(events[ln.dataset.i]);
+      });
       cells.push([b, d]); $('grid').appendChild(b);
     }
   }
@@ -517,7 +547,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const nx = isToday ? evs.find(e => isNow(e, n) && !e.busy) : null;
     $('evrow').innerHTML = evs.length ? evs.map(e => {
       const past = isToday && !e.allDay && e.e < n;
-      return '<div class="ev' + (past ? ' past' : '') + (e === nx ? ' nextup' : '') + '" style="--c:' + C[e.p] + '">' +
+      return '<div class="ev' + (past ? ' past' : '') + (e === nx ? ' nextup' : '') + '" role="button" tabindex="0" data-i="' + e.i + '" style="--c:' + C[e.p] + '">' +
         (e === nx ? '<span class="badge">Najbližšie</span>' : '') +
         '<div class="tm tnum">' + (e.allDay ? 'Celý deň' : hm(e.s) + '–' + hm(e.e)) + '</div>' +
         '<div class="tt">' + (e.imp ? '! ' : '') + esc(e.t) + '</div><div class="who">' + WHO[e.p] + (e.where ? ' · ' + esc(e.where) : '') + '</div></div>';
@@ -525,6 +555,49 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const focus = $('evrow').querySelector('.nextup');
     $('evrow').scrollLeft = focus ? focus.offsetLeft - $('evrow').firstElementChild.offsetLeft : 0;
   }
+
+  // ---------- event detail ----------
+  const durTxt = min => min < 60 ? min + ' min' : Math.floor(min / 60) + ' h' + (min % 60 ? ' ' + (min % 60) + ' min' : '');
+  function openEvent(e) {
+    if (!e) return;
+    const n = new Date(), lng = { weekday: 'long', day: 'numeric', month: 'long' };
+    let when;
+    if (e.allDay) {
+      const last = new Date(e.e); last.setDate(last.getDate() - 1);
+      when = e.s.toLocaleDateString('sk-SK', lng) + (last > e.s ? ' – ' + last.toLocaleDateString('sk-SK', lng) : '') + ' · celý deň';
+    } else {
+      when = e.s.toLocaleDateString('sk-SK', lng) + ' · ' + hm(e.s) + '–' + hm(e.e) + (sameDay(e.s, e.e) ? '' : ' (' + e.e.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric' }) + ')') +
+        ' · ' + durTxt(Math.round((e.e - e.s) / 60000));
+    }
+    let state = '';
+    if (!e.allDay && e.s <= n && e.e > n) state = 'Práve prebieha · ešte ' + fmtLeft(Math.ceil((e.e - n) / 60000));
+    else if (!e.allDay && e.s > n && e.s - n < 12 * 3600000) state = 'Začína ' + fmtIn(Math.round((e.s - n) / 60000));
+    else if (e.e <= n) state = 'Už skončilo';
+    const row = (label, html) => html ? '<div class="dr"><span class="dl">' + label + '</span><div>' + html + '</div></div>' : '';
+    const pf = platform(e);
+    const att = e.att || [];
+    $('evBox').style.setProperty('--c', C[e.p]);
+    $('evBody').innerHTML =
+      '<div class="dwho">' + WHO[e.p] + '</div>' +
+      '<h1 id="evTitle">' + (e.imp ? '! ' : '') + esc(e.t) + '</h1>' +
+      '<div class="dwhen">' + esc(when) + '</div>' +
+      (state ? '<div class="dstate">' + state + '</div>' : '') +
+      row('Miesto', e.where ? esc(e.where) : '') +
+      row('Online', pf || e.join ? esc(pf || 'Online meeting') + (e.join ? ' <a class="join" href="' + esc(e.join) + '" target="_blank" rel="noopener">Pripojiť sa</a>' : '') : '') +
+      row('Organizátor', e.org ? esc(e.org) : '') +
+      row('Účastníci', att.length ? esc(att.slice(0, 12).join(', ')) + (att.length > 12 ? ' a ďalší ' + (att.length - 12) : '') : '') +
+      (e.desc ? '<div class="ddesc">' + esc(e.desc) + '</div>' : '') +
+      (!e.where && !e.desc && !e.org && !att.length && !e.join ? '<p class="dnone">Udalosť nemá ďalšie podrobnosti.</p>' : '');
+    $('evDlg').hidden = false;
+    $('evClose').focus();
+  }
+  $('evClose').addEventListener('click', () => { $('evDlg').hidden = true; });
+  $('evDlg').addEventListener('click', ev => { if (ev.target === $('evDlg')) $('evDlg').hidden = true; });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') $('evDlg').hidden = true; });
+  $('evrow').addEventListener('click', ev => { const c = ev.target.closest('.ev[data-i]'); if (c) openEvent(events[c.dataset.i]); });
+  $('evrow').addEventListener('keydown', ev => {
+    const c = ev.target.closest('.ev[data-i]'); if (c && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openEvent(events[c.dataset.i]); }
+  });
 
   function buildSsMonth() {
     const f = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -1074,7 +1147,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   let sTimer = null, idleTimer = null;
   buildSlides(); loadPhotos();
   function next() { slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
-  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden) return; show.hidden = false; next(); sTimer = setInterval(next, 8000); }
+  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden) return; show.hidden = false; next(); sTimer = setInterval(next, 8000); }
   function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
   function armIdle() { clearTimeout(idleTimer); if (show.hidden) idleTimer = setTimeout(startShow, IDLE_S * 1000); }
   $('idleS').textContent = IDLE_S;
