@@ -162,8 +162,19 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .tasks .meta .late { color: var(--now); font-weight: 700; }
 .tasks .t.imp { font-weight: 700; }
 .tasks .t.imp::before { content: "! "; color: var(--p-fam); }
-.board { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; align-content: start; }
-.board section { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.board { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; align-content: start; align-items: start; }
+.board section, .board .card { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; background: var(--panel); }
+.board .card.open { grid-column: span 2; border-color: var(--ink); }
+.cardhead { all: unset; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; width: 100%; cursor: pointer; }
+.cardhead:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; border-radius: 6px; }
+.cardhead .cnt { font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.board .peek { color: var(--muted); padding: 2px 0; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board .peek::before { content: "☐ "; }
+.board .peek.more::before { content: ""; }
+.board .addrow { margin-top: 6px; }
+.board .newlist { border-style: dashed; }
+.tasks .sub { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 12px 6px 2px; }
+.tasks li.done .t { text-decoration: line-through; color: var(--muted); }
 .board h3 { font-family: var(--display); font-size: 1rem; margin: 0 0 6px; }
 .board .tasks label { padding: 8px 4px; font-size: 1rem; }
 
@@ -213,6 +224,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   .tabs { display: none; }
 }
 @media (max-width: 820px) {
+  .board .card.open { grid-column: auto; }
   .head { flex-wrap: wrap; }
   .app { height: auto; min-height: 100%; overflow: visible; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "head" "cal" "day" "todo"; }
   .cal { min-height: 480px; }
@@ -640,8 +652,9 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     catch (e) { store.del('kal-pass'); showLock(enc, 'Heslo sa zmenilo, zadaj ho znova.'); }
   }
 
-  // ---------- to-do: Todoist when its key comes with the calendar data, otherwise kept on this device ----------
-  const todo = { token: store.get('kal-todoist'), tasks: [], projects: {}, error: '' };
+  // ---------- to-do: Todoist when connected on this device, otherwise kept locally ----------
+  const DONE_DAYS = 30;
+  const todo = { token: store.get('kal-todoist'), tasks: [], done: [], projects: {}, projectList: [], error: '' };
   function syncTdBtn() { $('tdBtn').textContent = todo.token ? 'Todoist ✓' : 'Pripojiť Todoist'; }
   $('tdBtn').addEventListener('click', () => {
     $('tdErr').textContent = ''; $('tdToken').value = ''; $('tdOff').hidden = !todo.token;
@@ -649,7 +662,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   });
   $('tdCancel').addEventListener('click', () => { $('tdDlg').hidden = true; });
   $('tdOff').addEventListener('click', () => {
-    store.del('kal-todoist'); todo.token = null; todo.tasks = []; todo.error = '';
+    store.del('kal-todoist'); todo.token = null; todo.tasks = []; todo.done = []; todo.error = '';
     $('tdDlg').hidden = true; syncTdBtn(); renderTasks();
   });
   $('tdForm').addEventListener('submit', async e => {
@@ -684,38 +697,71 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   async function loadTodoist() {
     if (!todo.token) return;
     try {
-      const [tasks, projects] = await Promise.all([tdAll('tasks'), tdAll('projects')]);
+      const since = new Date(Date.now() - DONE_DAYS * 86400000).toISOString();
+      const until = new Date(Date.now() + 60000).toISOString();
+      const [tasks, projects, done] = await Promise.all([tdAll('tasks'), tdAll('projects'), tdDone(since, until)]);
+      todo.projectList = projects.filter(p => !p.is_archived && !p.is_deleted);
       todo.projects = Object.fromEntries(projects.map(p => [p.id, p.name]));
       todo.tasks = tasks.filter(t => !t.checked && !t.is_deleted);
+      todo.done = done;
       todo.error = '';
     } catch (e) {
       todo.error = 'Todoist sa nepodarilo načítať (' + e.message + ')';
     }
     renderTasks();
   }
+  // Completed tasks of the last DONE_DAYS days, so finished things stay visible and can be put back
+  async function tdDone(since, until) {
+    let out = [], cursor = null;
+    do {
+      const j = await td('tasks/completed/by_completion_date?limit=200&since=' + encodeURIComponent(since) + '&until=' + encodeURIComponent(until) + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+      out = out.concat((j && (j.items || j.results)) || []);
+      cursor = j && j.next_cursor;
+    } while (cursor);
+    return out;
+  }
 
-  // Common shape for both sources: { id, t, done, due: Date|null, timed, imp, project }
+  // Common shape for both sources: { id, t, done, doneAt, due: Date|null, timed, imp, project, projectId }
+  function mapTask(t, done) {
+    const dd = t.due && (t.due.datetime || t.due.date);
+    let due = null, timed = false;
+    if (dd && !done) {
+      if (/T/.test(dd)) { due = new Date(dd); timed = true; }
+      else { const [y, m, d] = dd.split('-').map(Number); due = new Date(y, m - 1, d); }
+    }
+    return { id: t.id || t.task_id, t: t.content, done, doneAt: done && t.completed_at ? new Date(t.completed_at) : null, due, timed,
+      imp: t.priority === 4, projectId: t.project_id, project: todo.projects[t.project_id] || 'Úlohy', order: t.child_order || 0, raw: t };
+  }
   function taskList() {
-    if (!todo.token) return local.map((t, i) => ({ id: 'l' + i, t: t.t, done: t.done, due: null, imp: false, project: 'Úlohy', src: t }));
-    return todo.tasks.map(t => {
-      const dd = t.due && (t.due.datetime || t.due.date);
-      let due = null, timed = false;
-      if (dd) {
-        if (/T/.test(dd)) { due = new Date(dd); timed = true; }
-        else { const [y, m, d] = dd.split('-').map(Number); due = new Date(y, m - 1, d); }
-      }
-      return { id: t.id, t: t.content, done: false, due, timed, imp: t.priority === 4, project: todo.projects[t.project_id] || 'Úlohy', order: t.child_order || t.order || 0 };
-    }).sort((a, b) => ((a.due ? a.due.getTime() : Infinity) - (b.due ? b.due.getTime() : Infinity)) || (b.imp - a.imp) || (a.order - b.order));
+    if (!todo.token) return local.filter(t => !t.done).map(t => ({ id: 'l' + local.indexOf(t), t: t.t, done: false, due: null, project: 'Úlohy', src: t }));
+    return todo.tasks.map(t => mapTask(t, false))
+      .sort((a, b) => ((a.due ? a.due.getTime() : Infinity) - (b.due ? b.due.getTime() : Infinity)) || (b.imp - a.imp) || (a.order - b.order));
+  }
+  function doneList() {
+    if (!todo.token) return local.filter(t => t.done).map(t => ({ id: 'l' + local.indexOf(t), t: t.t, done: true, due: null, project: 'Úlohy', src: t }));
+    // An item that is open again (put back on the list) is not shown twice
+    const open = new Set(todo.tasks.map(t => t.project_id + '|' + plain(t.content)));
+    const seen = new Set();
+    return todo.done.map(t => mapTask(t, true))
+      .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0))
+      .filter(t => {
+        const k = t.projectId + '|' + plain(t.t);
+        if (open.has(k) || seen.has(k)) return false;
+        seen.add(k); return true;
+      });
   }
   function dueLabel(t) {
+    if (t.done) return t.doneAt ? 'hotové ' + (sameDay(t.doneAt, today) ? 'dnes' : t.doneAt.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric' })) : '';
     if (!t.due) return '';
     const d = midnight(t.due), diff = Math.round((d - today) / 86400000);
     const txt = diff === 0 ? 'dnes' : diff === 1 ? 'zajtra' : diff === -1 ? 'včera' : t.due.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric' });
     return '<span class="' + (diff < 0 ? 'late' : '') + '">' + txt + (t.timed ? ' ' + hm(t.due) : '') + '</span>';
   }
-  function taskItem(t, prefix) {
-    const li = document.createElement('li'); const id = prefix + t.id;
-    const meta = [dueLabel(t), todo.token && prefix === 'p' ? esc(t.project) : ''].filter(Boolean).join(' · ');
+  let uid = 0;
+  function taskItem(t, showProject) {
+    const li = document.createElement('li'); const id = 'tk' + (uid++);
+    if (t.done) li.className = 'done';
+    const meta = [dueLabel(t), todo.token && showProject ? esc(t.project) : ''].filter(Boolean).join(' · ');
     li.innerHTML = '<label for="' + id + '"><input type="checkbox" id="' + id + '"' + (t.done ? ' checked' : '') + '><span class="t' + (t.imp ? ' imp' : '') + '">' + esc(t.t) +
       (meta ? '<span class="meta">' + meta + '</span>' : '') + '</span></label>';
     li.querySelector('input').addEventListener('change', ev => complete(t, ev.target.checked));
@@ -723,41 +769,96 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   }
   async function complete(t, done) {
     if (!todo.token) { t.src.done = done; saveLocal(); renderTasks(); return; }
-    if (!done) return;
-    todo.tasks = todo.tasks.filter(x => x.id !== t.id);
-    setTimeout(renderTasks, 400);
-    try { await td('tasks/' + t.id + '/close', { method: 'POST' }); }
-    catch (e) { todo.error = 'Úlohu sa nepodarilo odškrtnúť v Todoist'; loadTodoist(); }
+    if (done) {
+      todo.tasks = todo.tasks.filter(x => x.id !== t.id);
+      todo.done.unshift(Object.assign({}, t.raw, { completed_at: new Date().toISOString() }));
+    } else {
+      // Unticking a finished item puts it back on its list, like Google Keep
+      todo.done = todo.done.filter(x => (x.id || x.task_id) !== t.id);
+      todo.tasks.push(Object.assign({}, t.raw, { checked: false }));
+    }
+    setTimeout(renderTasks, 300);
+    try { await td('tasks/' + t.id + (done ? '/close' : '/reopen'), { method: 'POST' }); }
+    catch (e) { todo.error = done ? 'Úlohu sa nepodarilo odškrtnúť v Todoist' : 'Úlohu sa nepodarilo vrátiť späť'; loadTodoist(); }
   }
   function renderTasks() {
     const list = taskList();
+    const done = doneList().filter(t => !t.doneAt || Date.now() - t.doneAt < 7 * 86400000).slice(0, 15);
     $('tasks').innerHTML = '';
     if (todo.error) $('tasks').insertAdjacentHTML('beforeend', '<li class="empty">' + esc(todo.error) + '</li>');
-    if (!list.length) $('tasks').insertAdjacentHTML('beforeend', '<li class="empty">Žiadne úlohy.' + (todo.token ? '' : ' Pridaj prvú nižšie.') + '</li>');
-    list.forEach(t => $('tasks').appendChild(taskItem(t, 'p')));
+    if (!list.length) $('tasks').insertAdjacentHTML('beforeend', '<li class="empty">Žiadne otvorené úlohy.</li>');
+    list.forEach(t => $('tasks').appendChild(taskItem(t, true)));
+    if (done.length) {
+      $('tasks').insertAdjacentHTML('beforeend', '<li class="sub">Splnené</li>');
+      done.forEach(t => $('tasks').appendChild(taskItem(t, true)));
+    }
     $('clearDone').hidden = !!todo.token || !local.some(x => x.done);
     if (view === 'tasks') renderBoard();
   }
+
+  // ---------- lists board (Google Keep style): one card per Todoist project ----------
+  let openCards = new Set();
+  try { openCards = new Set(JSON.parse(store.get('kal-open') || '[]')); } catch (e) {}
+  const saveCards = () => store.set('kal-open', JSON.stringify([...openCards]));
   function renderBoard() {
-    const groups = {};
-    taskList().forEach(t => { (groups[t.project] = groups[t.project] || []).push(t); });
+    const open = taskList(), done = doneList();
+    const lists = todo.token ? todo.projectList.map(p => ({ id: p.id, name: p.name })) : [{ id: 'local', name: 'Úlohy' }];
+    const of = (arr, l) => arr.filter(t => todo.token ? t.projectId === l.id : true);
     $('board').innerHTML = '';
-    const names = Object.keys(groups);
-    if (!names.length) { $('board').innerHTML = '<p class="empty">Žiadne úlohy.</p>'; return; }
-    names.forEach(name => {
+    lists.forEach(l => {
+      const items = of(open, l), fin = of(done, l);
+      const expanded = openCards.has(String(l.id));
       const sec = document.createElement('section');
-      sec.innerHTML = '<h3>' + esc(name) + '</h3><ul class="tasks"></ul>';
-      groups[name].forEach(t => sec.querySelector('ul').appendChild(taskItem(t, 'b')));
+      sec.className = 'card' + (expanded ? ' open' : '');
+      sec.innerHTML = '<button type="button" class="cardhead" aria-expanded="' + expanded + '"><h3>' + esc(l.name) + '</h3><span class="cnt">' +
+        items.length + (fin.length ? ' · ' + fin.length + ' hotové' : '') + '</span></button>';
+      sec.querySelector('.cardhead').addEventListener('click', () => {
+        const k = String(l.id); openCards.has(k) ? openCards.delete(k) : openCards.add(k); saveCards(); renderBoard();
+      });
+      const ul = document.createElement('ul'); ul.className = 'tasks';
+      if (expanded) {
+        items.forEach(t => ul.appendChild(taskItem(t, false)));
+        if (fin.length) {
+          ul.insertAdjacentHTML('beforeend', '<li class="sub">Hotové · ťukni pre vrátenie do zoznamu</li>');
+          fin.forEach(t => ul.appendChild(taskItem(t, false)));
+        }
+        sec.appendChild(ul);
+        if (todo.token) {
+          const f = document.createElement('form'); f.className = 'addrow';
+          f.innerHTML = '<input type="text" placeholder="Pridať do zoznamu" aria-label="Pridať do zoznamu ' + esc(l.name) + '"><button type="submit">+</button>';
+          f.addEventListener('submit', ev => { ev.preventDefault(); const v = f.querySelector('input').value.trim(); if (v) addTask(v, l.id); });
+          sec.appendChild(f);
+        }
+      } else {
+        // Collapsed: a short preview like a Keep note
+        items.slice(0, 4).forEach(t => ul.insertAdjacentHTML('beforeend', '<li class="peek">' + esc(t.t) + '</li>'));
+        if (items.length > 4) ul.insertAdjacentHTML('beforeend', '<li class="peek more">+ ďalšie ' + (items.length - 4) + '</li>');
+        if (!items.length) ul.insertAdjacentHTML('beforeend', '<li class="peek more">Prázdny zoznam</li>');
+        sec.appendChild(ul);
+      }
       $('board').appendChild(sec);
     });
+    if (todo.token) {
+      const f = document.createElement('form'); f.className = 'card newlist';
+      f.innerHTML = '<h3>Nový zoznam</h3><div class="addrow"><input type="text" placeholder="napr. Nákup" aria-label="Názov nového zoznamu"><button type="submit">Vytvoriť</button></div>';
+      f.addEventListener('submit', async ev => {
+        ev.preventDefault(); const v = f.querySelector('input').value.trim(); if (!v) return;
+        try { const p = await td('projects', { method: 'POST', body: JSON.stringify({ name: v }) }); if (p && p.id) { openCards.add(String(p.id)); saveCards(); } }
+        catch (err) { todo.error = 'Zoznam sa nepodarilo vytvoriť'; }
+        loadTodoist();
+      });
+      $('board').appendChild(f);
+    }
   }
-  $('addForm').addEventListener('submit', async e => {
-    e.preventDefault(); const v = $('newTask').value.trim(); if (!v) return;
-    $('newTask').value = '';
+  async function addTask(v, projectId) {
     if (!todo.token) { local.push({ t: v, done: false }); saveLocal(); renderTasks(); return; }
-    try { await td('tasks', { method: 'POST', body: JSON.stringify({ content: v }) }); }
+    try { await td('tasks', { method: 'POST', body: JSON.stringify(projectId ? { content: v, project_id: projectId } : { content: v }) }); }
     catch (err) { todo.error = 'Úlohu sa nepodarilo pridať do Todoist'; }
     loadTodoist();
+  }
+  $('addForm').addEventListener('submit', e => {
+    e.preventDefault(); const v = $('newTask').value.trim(); if (!v) return;
+    $('newTask').value = ''; addTask(v);
   });
   $('clearDone').addEventListener('click', () => { local = local.filter(t => !t.done); saveLocal(); renderTasks(); });
   syncTdBtn();
