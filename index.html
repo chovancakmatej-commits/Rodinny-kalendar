@@ -236,14 +236,63 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .slide { position: absolute; inset: -4%; opacity: 0; transition: opacity 1.6s ease; background-size: cover; }
 .slide.on { opacity: 1; animation: kb 12s linear forwards; }
 @keyframes kb { from { transform: scale(1); } to { transform: scale(1.08) translate(-1%, -1%); } }
-.show .ov { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px max(28px, env(safe-area-inset-left, 0px)) calc(28px + env(safe-area-inset-bottom, 0px));
-  display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; color: #fff;
-  background: linear-gradient(transparent, rgba(0,0,0,.55)); }
-.show .bigclock { font-family: var(--display); font-weight: 700; font-size: clamp(3rem, 9vw, 6rem); line-height: 1; text-shadow: 0 2px 20px rgba(0,0,0,.4); }
-.show .pill { background: rgba(255,255,255,.18); backdrop-filter: blur(8px); border-radius: 14px; padding: 10px 16px; font-size: 1.05rem; max-width: 100%; }
-.show .cap { position: absolute; top: calc(16px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); color: rgba(255,255,255,.75); font-size: .85rem; }
-.ssmonth { position: absolute; top: calc(48px + env(safe-area-inset-top, 0px)); right: max(28px, env(safe-area-inset-right, 0px)); width: min(340px, 80vw);
-  background: rgba(10,14,20,.45); backdrop-filter: blur(10px); border-radius: 18px; padding: 16px 18px; color: #fff; }
+/* Screensaver: glass cards over the photos, or over a calm geometric background when there are none */
+.ssbg { position: absolute; inset: 0; background: linear-gradient(135deg, #16202c, #23324a 55%, #2c2440); overflow: hidden; }
+.ssbg i { position: absolute; border-radius: 50%; filter: blur(2px); opacity: .55; animation: drift 40s ease-in-out infinite alternate; }
+.ssbg i:nth-child(1) { width: 52vmax; height: 52vmax; left: -14vmax; top: -18vmax; background: radial-gradient(circle at 35% 35%, #3d6fb6, transparent 70%); }
+.ssbg i:nth-child(2) { width: 40vmax; height: 40vmax; right: -10vmax; bottom: -16vmax; background: radial-gradient(circle at 50% 50%, #a2477e, transparent 70%); animation-duration: 55s; }
+.ssbg i:nth-child(3) { width: 26vmax; height: 26vmax; left: 38vw; top: 46vh; background: radial-gradient(circle, #1d8a78, transparent 70%); animation-duration: 47s; }
+.ssbg i:nth-child(4) { width: 18vmax; height: 18vmax; right: 30vw; top: -6vmax; border-radius: 28%; transform: rotate(20deg); background: linear-gradient(135deg, rgba(227,168,58,.7), transparent 75%); animation-duration: 62s; }
+@keyframes drift { from { translate: 0 0; } to { translate: 4vw 3vh; } }
+.glass { background: rgba(255,255,255,.12); backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid rgba(255,255,255,.22); border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.18); color: #fff; }
+.ssmain { position: absolute; left: max(32px, env(safe-area-inset-left, 0px)); bottom: calc(32px + env(safe-area-inset-bottom, 0px)); width: min(600px, 56vw); display: flex; flex-direction: column; gap: 14px; }
+.clockcard { padding: 18px 28px 22px; }
+.show .bigclock { font-family: var(--display); font-weight: 700; font-size: clamp(4rem, 20vh, 9.5rem); line-height: 1; letter-spacing: -.03em; text-shadow: 0 2px 20px rgba(0,0,0,.25); }
+.ssdate { font-size: 1.3rem; font-weight: 600; text-transform: capitalize; opacity: .9; margin-top: 6px; }
+.ssrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; }
+.ssrow > .glass { padding: 14px 18px; min-width: 0; }
+.sswx { display: flex; align-items: center; gap: 12px; }
+.sswx .ic { font-size: 2.6rem; line-height: 1; }
+.sswx .tp { font-family: var(--display); font-weight: 700; font-size: 2.2rem; line-height: 1; }
+.sswx .sm { font-size: .85rem; opacity: .8; }
+.ssnow .lbl, .sstasks .lbl { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .7; margin-bottom: 4px; }
+#ssNext { font-size: 1.1rem; font-weight: 600; }
+.ssside { position: absolute; top: calc(28px + env(safe-area-inset-top, 0px)); right: max(28px, env(safe-area-inset-right, 0px)); width: min(340px, 34vw);
+  display: flex; flex-direction: column; gap: 14px; max-height: calc(100% - 56px); }
+.ssmonth { padding: 16px 18px; }
+.sstasks { padding: 14px 18px; min-height: 0; overflow: hidden; }
+.sstasks ul { list-style: none; margin: 0; padding: 0; }
+.sstasks li { padding: 4px 0; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sstasks li::before { content: "○ "; opacity: .7; }
+.sstasks li.more::before { content: ""; }
+.show .cap { position: absolute; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top, 0px)); color: rgba(255,255,255,.55); font-size: .8rem; }
+
+/* Weather */
+.wx { all: unset; display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 12px; cursor: pointer; flex: none; }
+.wx:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.wx:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
+.wx .ic { font-size: 2rem; line-height: 1; }
+.wx .tp { font-family: var(--display); font-weight: 700; font-size: 1.7rem; line-height: 1; }
+.wx .sm { font-size: .78rem; color: var(--muted); white-space: nowrap; }
+.lock.wxdlg { background: rgba(0,0,0,.45); }
+.wxbox { width: min(560px, 100%); max-height: calc(100dvh - 32px); }
+.wxbody { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+.wxbody .cur { display: flex; align-items: center; gap: 16px; }
+.wxbody .cur .ic { font-size: 3.2rem; }
+.wxbody .cur .tp { font-family: var(--display); font-weight: 700; font-size: 2.6rem; line-height: 1; }
+.wxbody .hrs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.wxbody .hrs div { flex: 0 0 auto; text-align: center; min-width: 52px; padding: 8px 4px; border-radius: 10px; background: color-mix(in srgb, var(--ink) 4%, transparent); font-size: .85rem; }
+.wxbody .hrs b { display: block; font-size: 1rem; }
+.wxbody .hrs .i { font-size: 1.3rem; display: block; margin: 2px 0; }
+.wxbody .days { display: flex; flex-direction: column; }
+.wxbody .day3 { display: grid; grid-template-columns: 90px 36px 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.wxbody .day3 .n { font-weight: 700; text-transform: capitalize; }
+.wxbody .day3 .i { font-size: 1.6rem; }
+.wxbody .day3 .d { color: var(--muted); font-size: .9rem; }
+.wxbody .day3 .t { font-weight: 700; white-space: nowrap; }
+.wxbody .day3 .t span { color: var(--muted); font-weight: 400; }
+.wxbody .src { color: var(--muted); font-size: .75rem; }
 .ssmonth .mt { font-family: var(--display); font-weight: 700; font-size: 1.2rem; text-transform: capitalize; margin-bottom: 8px; }
 .ssmonth .mg { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-variant-numeric: tabular-nums; }
 .ssmonth .mg span { padding: 5px 0 7px; position: relative; font-size: .95rem; border-radius: 50%; }
@@ -252,7 +301,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .ssmonth .mg .td { background: #fff; color: #111; font-weight: 700; }
 .ssmonth .mg .has::after { content: ""; position: absolute; left: 50%; bottom: 2px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #ffc56b; }
 .ssmonth .mg .td.has::after { background: #c58410; }
-@media (max-height: 500px) { .ssmonth { display: none; } }
+@media (max-height: 500px) { .ssside { display: none; } .show .bigclock { font-size: 4rem; } }
 .slide.photo { background-color: #000; background-position: center; }
 .phbox { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
 .phgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; overflow-y: auto; min-height: 0; max-height: 46dvh; }
@@ -290,6 +339,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     <div>
       <div class="date" id="date"></div>
     </div>
+    <button type="button" class="wx" id="wx" aria-label="Počasie, ťukni pre predpoveď" hidden></button>
     <div class="next" id="next" aria-live="polite">
       <div class="fill" id="nextFill"></div>
       <div class="count tnum" id="nextCount"></div>
@@ -383,11 +433,25 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 <div class="undo" id="undo" hidden role="status"><span id="undoText"></span><button type="button" id="undoBtn">Späť</button></div>
 
 <div class="show" id="show" hidden>
-  <div class="cap" id="ssCap">Ukážkové „fotky“ · dotykom späť na kalendár</div>
-  <div class="ssmonth" id="ssMonth"></div>
-  <div class="ov">
-    <div class="bigclock tnum" id="ssClock"></div>
-    <div class="pill" id="ssNext"></div>
+  <div class="ssbg" id="ssBg" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div class="ssmain">
+    <div class="glass clockcard"><div class="bigclock tnum" id="ssClock"></div><div class="ssdate" id="ssDate"></div></div>
+    <div class="ssrow">
+      <div class="glass sswx" id="ssWx" hidden></div>
+      <div class="glass ssnow"><div class="lbl">V kalendári</div><div id="ssNext"></div></div>
+    </div>
+  </div>
+  <div class="ssside">
+    <div class="glass ssmonth" id="ssMonth"></div>
+    <div class="glass sstasks" id="ssTasks"></div>
+  </div>
+  <div class="cap">Dotykom späť na kalendár</div>
+</div>
+
+<div class="lock wxdlg" id="wxDlg" hidden>
+  <div class="lockbox wxbox" role="dialog" aria-modal="true" aria-labelledby="wxTitle">
+    <div class="wxbody" id="wxBody"></div>
+    <button type="button" id="wxClose">Zavrieť</button>
   </div>
 </div>
 
@@ -722,6 +786,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     if (!sameDay(n, today)) { const wasToday = sameDay(selected, today), anchorToday = sameDay(anchor, today); today = midnight(n); if (wasToday) selected = today; if (anchorToday) anchor = today; render(); return; }
     $('clock').textContent = hm(n); $('ssClock').textContent = hm(n);
     $('date').textContent = n.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
+    $('ssDate').textContent = $('date').textContent;
     renderNow(n);
     if (sameDay(selected, today)) renderDay();
   }
@@ -1006,6 +1071,8 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       done.forEach(t => $('tasks').appendChild(taskItem(t, true)));
     }
     $('clearDone').hidden = !!todo.token || !local.some(x => x.done);
+    $('ssTasks').innerHTML = '<div class="lbl">Úlohy</div><ul>' + (list.length ? list.slice(0, 6).map(t => '<li>' + esc(t.t) + '</li>').join('') +
+      (list.length > 6 ? '<li class="more">+ ďalšie ' + (list.length - 6) + '</li>' : '') : '<li class="more">Všetko hotové</li>') + '</ul>';
     if (view === 'tasks') renderBoard();
   }
 
@@ -1082,23 +1149,98 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   setInterval(loadTodoist, 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadTodoist(); });
 
-  // ---------- slideshow: family photos picked on this device (kept in IndexedDB), example scenes until then ----------
-  const scenes = [
-    'radial-gradient(circle at 70% 30%, #ffd9a0 0 8%, transparent 9%), linear-gradient(#f6a96b, #d9667a 45%, #3b3557 46%, #1f2440)',
-    'radial-gradient(ellipse at 30% 110%, #2f6b3f 0 40%, transparent 41%), radial-gradient(ellipse at 80% 115%, #24532f 0 45%, transparent 46%), linear-gradient(#9cc9e8, #e6f1f7 60%, #6f9b6e 61%)',
-    'linear-gradient(160deg, transparent 55%, #e9eef2 55% 70%, transparent 70%), linear-gradient(#5d7fa8, #a9c1d9 50%, #2f5a7c 51%, #18344d)',
-    'radial-gradient(circle at 25% 25%, #fff3c4 0 6%, transparent 7%), linear-gradient(135deg, #e8b44c, #c4573a 60%, #6b2a3a)'
-  ];
+  // ---------- weather (Open-Meteo, no key); place from the tablet's location, Bratislava if not allowed ----------
+  const WX = [[[0], 'Jasno', '☀️', '🌙'], [[1], 'Prevažne jasno', '🌤️', '🌙'], [[2], 'Polojasno', '⛅', '☁️'], [[3], 'Zamračené', '☁️'],
+    [[45, 48], 'Hmla', '🌫️'], [[51, 53, 55, 56, 57], 'Mrholenie', '🌦️'], [[61, 63, 65], 'Dážď', '🌧️'], [[66, 67], 'Mrznúci dážď', '🌧️'],
+    [[71, 73, 75, 77], 'Sneženie', '🌨️'], [[80, 81, 82], 'Prehánky', '🌦️'], [[85, 86], 'Snehové prehánky', '🌨️'], [[95, 96, 99], 'Búrka', '⛈️']];
+  const wxInfo = (code, day = 1) => { const r = WX.find(x => x[0].includes(code)) || [[], '', '🌡️']; return { txt: r[1], ic: !day && r[3] ? r[3] : r[2] }; };
+  const deg = v => Math.round(v) + '°';
+  let wxData = null;
+  try { wxData = JSON.parse(store.get('kal-wx') || 'null'); } catch (e) {}
+  function wxPlace() {
+    let saved = null; try { saved = JSON.parse(store.get('kal-wx-loc') || 'null'); } catch (e) {}
+    if (saved) return Promise.resolve(saved);
+    const fallback = { lat: 48.1486, lon: 17.1077, name: 'Bratislava' };
+    return new Promise(res => {
+      if (!navigator.geolocation) return res(fallback);
+      navigator.geolocation.getCurrentPosition(async pos => {
+        const loc = { lat: +pos.coords.latitude.toFixed(3), lon: +pos.coords.longitude.toFixed(3), name: '' };
+        try {
+          const g = await (await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + loc.lat + '&longitude=' + loc.lon + '&localityLanguage=sk')).json();
+          loc.name = g.city || g.locality || '';
+        } catch (e) {}
+        store.set('kal-wx-loc', JSON.stringify(loc)); res(loc);
+      }, () => res(fallback), { timeout: 15000, maximumAge: 86400000 });
+    });
+  }
+  async function loadWeather() {
+    try {
+      const loc = await wxPlace();
+      const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat + '&longitude=' + loc.lon +
+        '&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m' +
+        '&hourly=temperature_2m,weather_code,precipitation_probability,is_day' +
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=4&timezone=auto');
+      if (!r.ok) throw new Error(r.status);
+      wxData = Object.assign(await r.json(), { place: loc.name, at: Date.now() });
+      store.set('kal-wx', JSON.stringify(wxData));
+    } catch (e) {}
+    renderWeather();
+  }
+  function renderWeather() {
+    const d = wxData;
+    if (!d || !d.current || Date.now() - d.at > 6 * 3600000) { $('wx').hidden = true; $('ssWx').hidden = true; return; }
+    const c = d.current, w = wxInfo(c.weather_code, c.is_day);
+    const mx = d.daily.temperature_2m_max[0], mn = d.daily.temperature_2m_min[0];
+    $('wx').hidden = false;
+    $('wx').innerHTML = '<span class="ic" aria-hidden="true">' + w.ic + '</span><span><span class="tp tnum">' + deg(c.temperature_2m) + '</span>' +
+      '<span class="sm">' + esc(w.txt) + ' · ' + deg(mx) + ' / ' + deg(mn) + '</span></span>';
+    $('wx').querySelector('.sm').style.display = 'block';
+    $('ssWx').hidden = false;
+    $('ssWx').innerHTML = '<span class="ic" aria-hidden="true">' + w.ic + '</span><div><div class="tp tnum">' + deg(c.temperature_2m) + '</div>' +
+      '<div class="sm">' + esc(w.txt) + (d.place ? ' · ' + esc(d.place) : '') + '</div><div class="sm">' + deg(mx) + ' / ' + deg(mn) + '</div></div>';
+  }
+  function openWeather() {
+    const d = wxData; if (!d) return;
+    const c = d.current, w = wxInfo(c.weather_code, c.is_day), n = Date.now();
+    const hrs = [];
+    d.hourly.time.forEach((t, i) => {
+      const at = new Date(t).getTime();
+      if (at > n - 1800000 && hrs.length < 12 && new Date(t).getHours() % 2 === 0) hrs.push(i);
+    });
+    const dayName = (t, i) => i === 1 ? 'Zajtra' : new Date(t + 'T12:00').toLocaleDateString('sk-SK', { weekday: 'long' });
+    $('wxBody').innerHTML =
+      '<h1 id="wxTitle">Počasie' + (d.place ? ' · ' + esc(d.place) : '') + '</h1>' +
+      '<div class="cur"><span class="ic" aria-hidden="true">' + w.ic + '</span><div><div class="tp tnum">' + deg(c.temperature_2m) + '</div>' +
+      '<div>' + esc(w.txt) + ' · pocitovo ' + deg(c.apparent_temperature) + ' · vietor ' + Math.round(c.wind_speed_10m) + ' km/h</div></div></div>' +
+      '<div class="hrs">' + hrs.map(i => '<div><b class="tnum">' + new Date(d.hourly.time[i]).getHours() + ':00</b><span class="i" aria-hidden="true">' +
+        wxInfo(d.hourly.weather_code[i], d.hourly.is_day[i]).ic + '</span><span class="tnum">' + deg(d.hourly.temperature_2m[i]) + '</span>' +
+        (d.hourly.precipitation_probability[i] >= 20 ? '<br><span class="tnum" style="color:var(--p-work)">' + d.hourly.precipitation_probability[i] + ' %</span>' : '') + '</div>').join('') + '</div>' +
+      '<div class="days">' + [1, 2, 3].filter(i => d.daily.time[i]).map(i => {
+        const x = wxInfo(d.daily.weather_code[i]);
+        return '<div class="day3"><span class="n">' + dayName(d.daily.time[i], i) + '</span><span class="i" aria-hidden="true">' + x.ic + '</span>' +
+          '<span class="d">' + esc(x.txt) + (d.daily.precipitation_probability_max[i] >= 20 ? ' · zrážky ' + d.daily.precipitation_probability_max[i] + ' %' : '') + '</span>' +
+          '<span class="t tnum">' + deg(d.daily.temperature_2m_max[i]) + ' <span>/ ' + deg(d.daily.temperature_2m_min[i]) + '</span></span></div>';
+      }).join('') + '</div>' +
+      '<div class="src">Aktualizované ' + hm(new Date(d.at)) + ' · Open-Meteo</div>';
+    $('wxDlg').hidden = false; $('wxClose').focus();
+  }
+  $('wx').addEventListener('click', openWeather);
+  $('wxClose').addEventListener('click', () => { $('wxDlg').hidden = true; });
+  $('wxDlg').addEventListener('click', ev => { if (ev.target === $('wxDlg')) $('wxDlg').hidden = true; });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') $('wxDlg').hidden = true; });
+  renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60000);
+
+  // ---------- slideshow: family photos picked on this device (kept in IndexedDB), geometric background until then ----------
   const show = $('show');
   let slides = [], photos = [];   // photos: { id, url }
   function buildSlides() {
     slides.forEach(s => s.remove());
-    const list = photos.length ? photos.map(p => 'url("' + p.url + '")').sort(() => Math.random() - .5) : scenes;
+    const list = photos.map(p => 'url("' + p.url + '")').sort(() => Math.random() - .5);
     slides = list.map(bg => {
-      const s = document.createElement('div'); s.className = 'slide' + (photos.length ? ' photo' : '');
+      const s = document.createElement('div'); s.className = 'slide photo';
       s.style.backgroundImage = bg; show.insertBefore(s, show.firstChild); return s;
     });
-    $('ssCap').hidden = photos.length > 0;
+    $('ssBg').hidden = photos.length > 0;
     si = 0;
   }
   const db = new Promise((res, rej) => {
@@ -1164,8 +1306,8 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   let si = 0;
   let sTimer = null, idleTimer = null;
   buildSlides(); loadPhotos();
-  function next() { slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
-  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden) return; show.hidden = false; next(); sTimer = setInterval(next, 8000); }
+  function next() { if (!slides.length) return; slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
+  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden) return; show.hidden = false; next(); sTimer = setInterval(next, 8000); }
   function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
   function armIdle() { clearTimeout(idleTimer); if (show.hidden) idleTimer = setTimeout(startShow, IDLE_S * 1000); }
   $('idleS').textContent = IDLE_S;
