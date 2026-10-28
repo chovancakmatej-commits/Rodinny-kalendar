@@ -207,6 +207,16 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .ev[data-i] { cursor: pointer; }
 .ev[data-i]:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
 .grid .ln { cursor: pointer; }
+/* Highlighted by hand: bold outline that stands out from everything else */
+.ln.hl { font-weight: 700; box-shadow: 0 0 0 2px var(--ink); background: color-mix(in srgb, var(--c) 30%, var(--panel)); }
+.ev.hl { box-shadow: 0 0 0 3px var(--ink); }
+.ev.hl .tt::before, .ln.hl::before { content: "★ "; }
+.sfev.hl { box-shadow: 0 0 0 2px #fff; font-weight: 700; }
+.sfev.hl .tt::before { content: "★ "; }
+.lockbox .hlbtn { align-self: flex-start; font: inherit; font-weight: 600; font-size: .95rem; border-radius: 999px; padding: 7px 14px; cursor: pointer;
+  border: 2px solid var(--line); background: none; color: var(--ink); }
+.lockbox .hlbtn.on { border-color: var(--ink); background: var(--ink); color: var(--panel); }
+.lockbox .hlbtn:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
 
 /* Event detail */
 .lock.evdlg { background: rgba(0,0,0,.45); }
@@ -618,7 +628,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       const vis = sameDay(d, today) ? evs.filter(e => e.allDay || e.e > n) : evs;
       const shown = vis.slice(0, maxLines);
       b.innerHTML = '<span class="n tnum">' + d.getDate() + '</span>' +
-        shown.map(e => '<span class="ln' + (e.imp ? ' imp' : '') + '" data-i="' + e.i + '" style="--c:' + C[e.p] + '">' + (e.allDay || !sameDay(e.s, d) ? '' : hm(e.s) + ' ') + (e.imp ? '! ' : '') + esc(e.t) + '</span>').join('') +
+        shown.map(e => '<span class="ln' + (e.imp ? ' imp' : '') + (isHl(e) ? ' hl' : '') + '" data-i="' + e.i + '" style="--c:' + C[e.p] + '">' + (e.allDay || !sameDay(e.s, d) ? '' : hm(e.s) + ' ') + (e.imp ? '! ' : '') + esc(e.t) + '</span>').join('') +
         (vis.length > maxLines ? '<span class="more">+' + (vis.length - maxLines) + ' ďalšie</span>' : '');
       b.setAttribute('aria-label', d.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' }) + ', ' + evs.length + ' udalostí');
       b.addEventListener('click', ev => {
@@ -654,7 +664,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const nx = isToday ? evs.find(e => isNow(e, n) && !e.busy) : null;
     $('evrow').innerHTML = evs.length ? evs.map(e => {
       const past = isToday && !e.allDay && e.e < n;
-      return '<div class="ev' + (past ? ' past' : '') + (e === nx ? ' nextup' : '') + '" role="button" tabindex="0" data-i="' + e.i + '" style="--c:' + C[e.p] + '">' +
+      return '<div class="ev' + (past ? ' past' : '') + (e === nx ? ' nextup' : '') + (isHl(e) ? ' hl' : '') + '" role="button" tabindex="0" data-i="' + e.i + '" style="--c:' + C[e.p] + '">' +
         (e === nx ? '<span class="badge">Najbližšie</span>' : '') +
         '<div class="tm tnum">' + (e.allDay ? 'Celý deň' : hm(e.s) + '–' + hm(e.e)) + '</div>' +
         '<div class="tt">' + (e.imp ? '! ' : '') + esc(e.t) + '</div><div class="who">' + WHO[e.p] + (e.where ? ' · ' + esc(e.where) : '') + '</div></div>';
@@ -673,6 +683,20 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     return 'https://calendar.google.com/calendar/render?action=TEMPLATE&dates=' + gstamp(s) + '/' + gstamp(e) + '&ctz=Europe/Bratislava';
   }
   const dayUrl = d => 'https://calendar.google.com/calendar/r/day/' + d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+
+  // ---------- highlighted events (chosen in the detail window, remembered on this device) ----------
+  let marked = new Set();
+  try { marked = new Set(JSON.parse(store.get('kal-hl') || '[]')); } catch (e) {}
+  const hlKey = e => e.p + '|' + e.t + '|' + e.s.getTime();
+  const isHl = e => marked.has(hlKey(e));
+  function toggleHl(e) {
+    const k = hlKey(e); marked.has(k) ? marked.delete(k) : marked.add(k);
+    // forget highlights of events that are long gone
+    const cut = Date.now() - 7 * 86400000;
+    marked = new Set([...marked].filter(x => +x.split('|').pop() > cut));
+    store.set('kal-hl', JSON.stringify([...marked]));
+    renderWeek(); renderDay(); renderSsDay();
+  }
 
   // ---------- event detail ----------
   const durTxt = min => min < 60 ? min + ' min' : Math.floor(min / 60) + ' h' + (min % 60 ? ' ' + (min % 60) + ' min' : '');
@@ -709,6 +733,12 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       (!e.where && !e.desc && !e.org && !att.length && !e.join ? '<p class="dnone">Udalosť nemá ďalšie podrobnosti.</p>' : '') +
       (e.p === 'work' ? '<p class="ro">Pracovný kalendár je na tablete len na zobrazenie.</p>'
         : demo ? '' : '<a class="gcal" href="' + dayUrl(e.s) + '" target="_blank" rel="noopener">Upraviť v Google Kalendári</a>');
+    const hb = document.createElement('button');
+    hb.type = 'button'; hb.className = 'hlbtn';
+    const paint = () => { const on = isHl(e); hb.classList.toggle('on', on); hb.setAttribute('aria-pressed', String(on)); hb.textContent = on ? '★ Zvýraznené v kalendári' : '☆ Zvýrazniť v kalendári'; };
+    hb.addEventListener('click', () => { toggleHl(e); paint(); });
+    paint();
+    $('evBody').querySelector('.dwhen').after(hb);
     $('evDlg').hidden = false;
     $('evClose').focus();
   }
@@ -735,7 +765,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       ? '<div class="sflegend">' + used.map(p => '<span style="--c:' + SC[p] + '"><i></i>' + WHO[p] + '</span>').join('') + '</div><div class="sflist">' +
         list.map(e => {
           const st = e.allDay ? '' : e.e <= n ? ' past' : e.s <= n ? ' now' : e === nextUp ? ' upn' : '';
-          return '<div class="sfev' + st + '" style="--c:' + SC[e.p] + '"><div class="tm">' + (e.allDay ? 'celý deň' : hm(e.s) + '–' + hm(e.e)) + '</div><div class="tt">' + (e.imp ? '! ' : '') + esc(e.t) + '</div></div>';
+          return '<div class="sfev' + st + (isHl(e) ? ' hl' : '') + '" style="--c:' + SC[e.p] + '"><div class="tm">' + (e.allDay ? 'celý deň' : hm(e.s) + '–' + hm(e.e)) + '</div><div class="tt">' + (e.imp ? '! ' : '') + esc(e.t) + '</div></div>';
         }).join('') + '</div>'
       : '<div class="sfempty">Dnes nič v kalendári</div>';
   }
