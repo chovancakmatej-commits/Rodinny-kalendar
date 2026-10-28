@@ -301,6 +301,13 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .show .cap { position: absolute; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top, 0px)); color: rgba(255,255,255,.55); font-size: .8rem; }
 
 #newTask { font-size: 1.15rem; padding: 14px 14px; }
+/* Big lined writing pad: opens from any add-task field so the pen has room */
+.lock.paddlg { background: rgba(0,0,0,.45); align-items: start; }
+.padbox { width: min(980px, 100%); margin-top: 2dvh; }
+.padbox textarea { font: inherit; font-size: 1.8rem; line-height: 64px; height: min(56dvh, 448px); resize: none; box-sizing: border-box;
+  padding: 0 18px; border-radius: 12px; border: 1px solid var(--line); color: var(--ink); -webkit-user-select: text; user-select: text;
+  background: var(--panel) repeating-linear-gradient(transparent 0 63px, color-mix(in srgb, var(--p-work) 35%, transparent) 63px 64px) local; }
+.padbox textarea:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
 
 /* Weather */
 .wx { all: unset; display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 12px; cursor: pointer; flex: none; }
@@ -477,6 +484,15 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     <div class="evbody" id="evBody"></div>
     <button type="button" id="evClose">Zavrieť</button>
   </div>
+</div>
+
+<div class="lock paddlg" id="padDlg" hidden>
+  <form class="lockbox padbox" id="padForm">
+    <h1 id="padTitle">Napíš perom</h1>
+    <p>Píš rovno na linajky. Každý riadok bude jedna úloha.</p>
+    <textarea id="padText" rows="6" aria-labelledby="padTitle" autocomplete="off"></textarea>
+    <div class="row"><button type="button" class="sec" id="padCancel">Zrušiť</button><button type="submit">Pridať</button></div>
+  </form>
 </div>
 
 <div class="undo" id="undo" hidden role="status"><span id="undoText"></span><button type="button" id="undoBtn">Späť</button></div>
@@ -1095,7 +1111,6 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
         const f = document.createElement('form'); f.className = 'addrow';
         f.innerHTML = '<input type="text" placeholder="Nová podúloha" aria-label="Pridať podúlohu do ' + esc(t.t) + '"><button type="submit">+</button>';
         f.addEventListener('submit', ev => { ev.preventDefault(); const v = f.querySelector('input').value.trim(); if (v) { refocus = t.id; addTask(v, null, t.id); } });
-        if (refocus === t.id) setTimeout(() => f.querySelector('input').focus(), 0);
         const box = document.createElement('div'); box.className = 'subbox';
         box.appendChild(ul); box.appendChild(f); li.appendChild(box);
       }
@@ -1230,6 +1245,31 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     catch (err) { todo.error = 'Úlohu sa nepodarilo pridať do Todoist'; }
     loadTodoist();
   }
+  // Tapping an add field opens the big writing pad; each written line becomes one item in that field's list
+  let padTarget = null;
+  function openPad(input) {
+    padTarget = input;
+    $('padTitle').textContent = input.getAttribute('aria-label') || 'Napíš perom';
+    $('padText').value = input.value; input.value = ''; input.blur();
+    $('padDlg').hidden = false;
+    setTimeout(() => $('padText').focus(), 50);
+  }
+  function closePad() { $('padDlg').hidden = true; padTarget = null; }
+  document.addEventListener('focusin', ev => {
+    const el = ev.target;
+    if (el.matches && el.matches('.todo .addrow input[type=text], .board .addrow input[type=text], .subbox .addrow input[type=text]') && $('padDlg').hidden) openPad(el);
+  });
+  $('padCancel').addEventListener('click', closePad);
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !$('padDlg').hidden) closePad(); });
+  $('padForm').addEventListener('submit', ev => {
+    ev.preventDefault();
+    const lines = $('padText').value.split('\n').map(x => x.trim()).filter(Boolean);
+    const input = padTarget, form = input && input.form;
+    closePad(); $('padText').value = '';
+    if (!form) return;
+    lines.forEach(l => { input.value = l; form.requestSubmit(); });
+  });
+
   $('addForm').addEventListener('submit', e => {
     e.preventDefault(); const v = $('newTask').value.trim(); if (!v) return;
     $('newTask').value = ''; addTask(v);
@@ -1399,7 +1439,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   let sTimer = null, idleTimer = null;
   buildSlides(); loadPhotos();
   function next() { if (!slides.length) return; slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
-  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden) return; show.hidden = false; renderSsDay(); next(); sTimer = setInterval(next, 8000); }
+  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden || !$('padDlg').hidden) return; show.hidden = false; renderSsDay(); next(); sTimer = setInterval(next, 8000); }
   function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
   function armIdle() { clearTimeout(idleTimer); if (show.hidden) idleTimer = setTimeout(startShow, IDLE_S * 1000); }
   $('idleS').textContent = IDLE_S;
