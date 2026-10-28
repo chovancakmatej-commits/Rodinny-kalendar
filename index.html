@@ -118,6 +118,9 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 /* Day events row */
 .day { grid-area: day; }
 .dayhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.dayhead .addev { font-size: .85rem; font-weight: 600; color: var(--ink); text-decoration: none; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; }
+.evbody .gcal { display: inline-block; font-weight: 600; color: var(--ink); text-decoration: none; border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; align-self: flex-start; }
+.evbody .ro { color: var(--muted); font-size: .85rem; }
 .evrow { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 .ev { flex: 0 0 auto; width: 180px; border-radius: 10px; padding: 7px 11px; box-sizing: border-box;
   background: color-mix(in srgb, var(--c) 13%, var(--panel)); border-top: 4px solid var(--c); }
@@ -318,7 +321,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   </section>
 
   <section class="panel day" aria-label="Udalosti dňa">
-    <div class="dayhead"><h2 id="dayTitle">Dnes</h2></div>
+    <div class="dayhead"><h2 id="dayTitle">Dnes</h2><a class="link addev" id="addEv" target="_blank" rel="noopener">+ Pridať udalosť</a></div>
     <div class="evrow" id="evrow"></div>
   </section>
 
@@ -542,6 +545,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     cells.forEach(([b, d]) => b.classList.toggle('sel', sameDay(d, selected)));
     const isToday = sameDay(selected, today);
     $('dayTitle').textContent = isToday ? 'Dnes' : selected.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
+    $('addEv').href = newEventUrl(selected);
     const n = new Date();
     const evs = byDay[key(selected)] || [];
     const nx = isToday ? evs.find(e => isNow(e, n) && !e.busy) : null;
@@ -555,6 +559,17 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const focus = $('evrow').querySelector('.nextup');
     $('evrow').scrollLeft = focus ? focus.offsetLeft - $('evrow').firstElementChild.offsetLeft : 0;
   }
+
+  // ---------- editing goes through Google Calendar; the work calendar stays read-only ----------
+  const ymd = d => d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+  const gstamp = d => ymd(d) + 'T' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0') + '00';
+  function newEventUrl(day) {
+    const n = new Date(), s = new Date(day);
+    if (sameDay(day, n)) s.setHours(n.getHours() + 1, 0, 0, 0); else s.setHours(9, 0, 0, 0);
+    const e = new Date(s.getTime() + 3600000);
+    return 'https://calendar.google.com/calendar/render?action=TEMPLATE&dates=' + gstamp(s) + '/' + gstamp(e) + '&ctz=Europe/Bratislava';
+  }
+  const dayUrl = d => 'https://calendar.google.com/calendar/r/day/' + d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
 
   // ---------- event detail ----------
   const durTxt = min => min < 60 ? min + ' min' : Math.floor(min / 60) + ' h' + (min % 60 ? ' ' + (min % 60) + ' min' : '');
@@ -588,7 +603,9 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       row('Organizátor', e.org ? esc(e.org) : '') +
       row('Účastníci', att.length ? esc(att.slice(0, 12).join(', ')) + (att.length > 12 ? ' a ďalší ' + (att.length - 12) : '') : '') +
       (e.desc ? '<div class="ddesc">' + esc(e.desc) + '</div>' : '') +
-      (!e.where && !e.desc && !e.org && !att.length && !e.join ? '<p class="dnone">Udalosť nemá ďalšie podrobnosti.</p>' : '');
+      (!e.where && !e.desc && !e.org && !att.length && !e.join ? '<p class="dnone">Udalosť nemá ďalšie podrobnosti.</p>' : '') +
+      (e.p === 'work' ? '<p class="ro">Pracovný kalendár je na tablete len na zobrazenie.</p>'
+        : demo ? '' : '<a class="gcal" href="' + dayUrl(e.s) + '" target="_blank" rel="noopener">Upraviť v Google Kalendári</a>');
     $('evDlg').hidden = false;
     $('evClose').focus();
   }
