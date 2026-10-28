@@ -246,12 +246,12 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 @keyframes drift { from { translate: 0 0; } to { translate: 4vw 3vh; } }
 .glass { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.55), 0 2px 18px rgba(0,0,0,.35); }
 /* Centre: big clock, date, then weather and calendar side by side */
-.ssmain { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: min(1000px, 92vw); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
+.ssmain { position: absolute; left: calc((100% - min(440px, 38vw) - 24px) / 2); top: 50%; transform: translate(-50%, -50%); width: calc(100% - min(440px, 38vw) - 72px); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
 .clockcard { padding: 0; }
-.show .bigclock { font-family: var(--display); font-weight: 700; font-size: clamp(5rem, 34vh, 17rem); line-height: .9; letter-spacing: -.04em; }
+.show .bigclock { font-family: var(--display); font-weight: 700; font-size: clamp(4rem, min(32vh, 21vw), 15rem); line-height: .9; letter-spacing: -.04em; }
 .ssdate { font-size: clamp(1.2rem, 3.6vh, 2rem); font-weight: 600; text-transform: capitalize; opacity: .92; margin-top: 4px; }
 .ssrow { display: flex; justify-content: center; align-items: center; gap: 18px 48px; flex-wrap: wrap; margin-top: 18px; }
-.ssrow > .glass { min-width: 0; max-width: 46vw; }
+.ssrow > .glass { min-width: 0; max-width: 100%; }
 .sswx { display: flex; align-items: center; gap: 14px; text-align: left; }
 .sswx .ic { font-size: 3rem; line-height: 1; }
 .sswx .tp { font-family: var(--display); font-weight: 700; font-size: 2.6rem; line-height: 1; }
@@ -259,16 +259,29 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .ssnow { text-align: left; }
 .ssnow .lbl, .sstasks .lbl { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .75; margin-bottom: 4px; }
 #ssNext { font-size: 1.35rem; font-weight: 600; }
-/* Corners: month bottom-left, open tasks bottom-right */
-.ssside { position: absolute; inset: auto max(32px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(32px, env(safe-area-inset-left, 0px));
-  display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; pointer-events: none; }
-.ssmonth { width: min(250px, 26vw); font-size: .88rem; }
-.ssmonth .mg span { padding: 3px 0 6px !important; font-size: .85rem !important; }
-.sstasks { width: min(300px, 30vw); text-align: right; }
-.sstasks ul { list-style: none; margin: 0; padding: 0; }
-.sstasks li { padding: 3px 0; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sstasks li::after { content: " ○"; opacity: .7; }
-.sstasks li.more::after { content: ""; }
+/* Right: frosted frame with today's programme, one column per calendar, tasks underneath */
+.ssframe { position: absolute; top: calc(44px + env(safe-area-inset-top, 0px)); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); right: max(24px, env(safe-area-inset-right, 0px));
+  width: min(440px, 38vw); box-sizing: border-box; padding: 18px 18px 16px; border-radius: 22px; color: #fff;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.sfh { font-family: var(--display); font-weight: 700; font-size: 1.15rem; text-transform: capitalize; }
+.sfcols { flex: 1 1 auto; min-height: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; overflow: hidden; }
+.sfcol { min-width: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.sfcol .who { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--c); padding-bottom: 4px; border-bottom: 2px solid var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sfev { border-left: 3px solid var(--c); padding: 4px 8px; border-radius: 0 8px 8px 0; font-size: .9rem; line-height: 1.25; }
+.sfev .tm { font-size: .78rem; opacity: .8; font-variant-numeric: tabular-nums; }
+.sfev .tt { font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sfev.past { opacity: .4; }
+.sfev.now { background: color-mix(in srgb, var(--c) 45%, transparent); box-shadow: 0 0 0 2px var(--c); }
+.sfev.now .tm::before { content: "TERAZ · "; font-weight: 800; letter-spacing: .05em; }
+.sfev.upn .tm::before { content: "ďalej · "; font-weight: 700; }
+.sfempty { opacity: .7; font-size: .95rem; }
+.sftasks { flex: 0 0 auto; border-radius: 14px; padding: 10px 12px; background: rgba(139,233,168,.14); border-left: 4px solid #8be9a8; }
+.sftasks .lbl { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #8be9a8; margin-bottom: 4px; }
+.sftasks ul { list-style: none; margin: 0; padding: 0; columns: 2; column-gap: 14px; }
+.sftasks li { padding: 2px 0; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; break-inside: avoid; }
+.sftasks li::before { content: "○ "; opacity: .7; }
+.sftasks li.more::before { content: ""; }
 .show .cap { position: absolute; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top, 0px)); color: rgba(255,255,255,.55); font-size: .8rem; }
 
 /* Weather */
@@ -304,7 +317,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .ssmonth .mg .td { background: #fff; color: #111; font-weight: 700; text-shadow: none; }
 .ssmonth .mg .has::after { content: ""; position: absolute; left: 50%; bottom: 2px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #ffc56b; }
 .ssmonth .mg .td.has::after { background: #c58410; }
-@media (max-height: 500px) { .ssside { display: none; } .ssmain { top: 50%; } }
+@media (max-height: 500px), (max-width: 700px) { .ssframe { display: none; } .ssmain { left: 50%; width: 92vw; } }
 .slide.photo { background-color: #000; background-position: center; }
 .phbox { width: min(640px, 100%); max-height: calc(100dvh - 32px); }
 .phgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; overflow-y: auto; min-height: 0; max-height: 46dvh; }
@@ -444,10 +457,12 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       <div class="glass ssnow"><div class="lbl">V kalendári</div><div id="ssNext"></div></div>
     </div>
   </div>
-  <div class="ssside">
-    <div class="glass ssmonth" id="ssMonth"></div>
-    <div class="glass sstasks" id="ssTasks"></div>
+  <div class="ssframe" id="ssFrame">
+    <div class="sfh" id="ssDayHead">Dnes</div>
+    <div class="sfcols" id="ssCols"></div>
+    <div class="sftasks" id="ssTasks"></div>
   </div>
+  <div class="ssmonth" id="ssMonth" hidden></div>
   <div class="cap">Dotykom späť na kalendár</div>
 </div>
 
@@ -684,6 +699,20 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const c = ev.target.closest('.ev[data-i]'); if (c && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openEvent(events[c.dataset.i]); }
   });
 
+  // Screensaver frame: today's events, one column per calendar, current one highlighted
+  function renderSsDay() {
+    const n = new Date(), evs = byDay[key(today)] || [];
+    $('ssDayHead').textContent = 'Dnes · ' + today.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
+    const nextUp = evs.find(e => !e.allDay && e.s > n);
+    const cols = ['work', 'me', 'wife', 'fam'].map(p => [p, evs.filter(e => e.p === p)]).filter(([, l]) => l.length);
+    const SC = { work: '#6f9ae0', me: '#3fbca6', wife: '#d277ac', fam: '#e3a83a' };   // bright variants that read on the dark screen
+    $('ssCols').innerHTML = cols.length ? cols.map(([p, l]) => '<div class="sfcol" style="--c:' + SC[p] + '"><div class="who">' + WHO[p] + '</div>' +
+      l.map(e => {
+        const st = e.allDay ? '' : e.e <= n ? ' past' : e.s <= n ? ' now' : e === nextUp ? ' upn' : '';
+        return '<div class="sfev' + st + '"><div class="tm">' + (e.allDay ? 'celý deň' : hm(e.s) + '–' + hm(e.e)) + '</div><div class="tt">' + (e.imp ? '! ' : '') + esc(e.t) + '</div></div>';
+      }).join('') + '</div>').join('') : '<div class="sfempty">Dnes nič v kalendári</div>';
+  }
+
   function buildSsMonth() {
     const f = new Date(today.getFullYear(), today.getMonth(), 1);
     const s = new Date(f); s.setDate(1 - ((f.getDay() + 6) % 7));
@@ -700,7 +729,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   }
 
   function render() {
-    index(); renderWeek(); renderDay(); buildSsMonth(); tick();
+    index(); renderWeek(); renderDay(); buildSsMonth(); renderSsDay(); tick();
   }
 
   function fmtIn(min) {
@@ -791,6 +820,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     $('date').textContent = n.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
     $('ssDate').textContent = $('date').textContent;
     renderNow(n);
+    if (!$('show').hidden) renderSsDay();
     if (sameDay(selected, today)) renderDay();
   }
 
@@ -1310,7 +1340,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   let sTimer = null, idleTimer = null;
   buildSlides(); loadPhotos();
   function next() { if (!slides.length) return; slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
-  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden) return; show.hidden = false; next(); sTimer = setInterval(next, 8000); }
+  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden) return; show.hidden = false; renderSsDay(); next(); sTimer = setInterval(next, 8000); }
   function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
   function armIdle() { clearTimeout(idleTimer); if (show.hidden) idleTimer = setTimeout(startShow, IDLE_S * 1000); }
   $('idleS').textContent = IDLE_S;
