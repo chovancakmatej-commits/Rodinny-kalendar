@@ -155,7 +155,7 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .todohead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .ttabs { display: flex; gap: 4px; margin-bottom: 10px; }
 .ttabs button { font: inherit; font-family: var(--display); font-weight: 700; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
-  color: var(--muted); background: none; border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  color: var(--muted); background: none; border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
 .ttabs button.on { background: var(--ink); color: var(--panel); }
 .ttabs button:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
 button.link { font: inherit; font-size: .8rem; color: var(--muted); background: none; border: 0; padding: 4px 0; cursor: pointer; text-decoration: underline; }
@@ -180,7 +180,17 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .tasks .sub { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 12px 6px 2px; }
 .tasks li.done .t { text-decoration: line-through; color: var(--muted); }
 .tasks li { position: relative; }
-.tasks li.done label { padding-right: 44px; }
+.tasks li.done label, .tasks li.hasexp > label { padding-right: 52px; }
+.tasks .exp { position: absolute; right: 2px; top: 6px; min-width: 40px; height: 40px; border-radius: 20px; border: 0; background: none;
+  color: var(--muted); font: inherit; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 3px; padding: 0 8px; }
+.tasks .exp span { font-size: .72rem; }
+.tasks .exp.on { color: var(--ink); background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.tasks .exp:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
+.subbox { margin: 0 0 8px 36px; padding-left: 10px; border-left: 2px solid var(--line); }
+.subbox .tasks label { padding: 6px 4px; font-size: .95rem; }
+.subbox .addrow { margin-top: 4px; }
+.subbox .addrow input { padding: 7px 10px; }
+.subbox .addrow button { padding: 6px 12px; }
 .tasks .del { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%;
   border: 0; background: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; }
 .tasks .del:hover, .tasks .del:focus-visible { background: color-mix(in srgb, var(--now) 15%, transparent); color: var(--now); outline: none; }
@@ -745,11 +755,11 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       else { const [y, m, d] = dd.split('-').map(Number); due = new Date(y, m - 1, d); }
     }
     return { id: t.id || t.task_id, t: t.content, done, doneAt: done && t.completed_at ? new Date(t.completed_at) : null, due, timed,
-      imp: t.priority === 4, projectId: t.project_id, project: todo.projects[t.project_id] || 'Úlohy', order: t.child_order || 0, raw: t };
+      imp: t.priority === 4, projectId: t.project_id, parentId: t.parent_id || null, project: todo.projects[t.project_id] || 'Úlohy', order: t.child_order || 0, raw: t };
   }
   function taskList() {
     if (!todo.token) return local.filter(t => !t.done).map(t => ({ id: 'l' + local.indexOf(t), t: t.t, done: false, due: null, project: 'Úlohy', src: t }));
-    return todo.tasks.map(t => mapTask(t, false))
+    return todo.tasks.map(t => mapTask(t, false)).filter(t => !t.parentId)
       .sort((a, b) => ((a.due ? a.due.getTime() : Infinity) - (b.due ? b.due.getTime() : Infinity)) || (b.imp - a.imp) || (a.order - b.order));
   }
   function doneList() {
@@ -760,7 +770,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     // An item that is open again (put back on the list) is not shown twice
     const open = new Set(todo.tasks.map(t => t.project_id + '|' + plain(t.content)));
     const seen = new Set();
-    return todo.done.map(t => mapTask(t, true))
+    return todo.done.map(t => mapTask(t, true)).filter(t => !t.parentId)
       .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0))
       .filter(t => {
         const k = t.projectId + '|' + plain(t.t);
@@ -775,8 +785,19 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const txt = diff === 0 ? 'dnes' : diff === 1 ? 'zajtra' : diff === -1 ? 'včera' : t.due.toLocaleDateString('sk-SK', { day: 'numeric', month: 'numeric' });
     return '<span class="' + (diff < 0 ? 'late' : '') + '">' + txt + (t.timed ? ' ' + hm(t.due) : '') + '</span>';
   }
-  let uid = 0;
-  function taskItem(t, showProject) {
+  // Subtasks of one task: open ones first, then the finished ones (kept so they can be ticked back)
+  function subsOf(id) {
+    const open = todo.tasks.filter(x => x.parent_id === id).map(x => mapTask(x, false)).sort((a, b) => a.order - b.order);
+    const names = new Set(open.map(x => plain(x.t)));
+    const done = todo.done.filter(x => x.parent_id === id).map(x => mapTask(x, true))
+      .filter(x => !removing.has(x.id) && !names.has(plain(x.t)) && names.add(plain(x.t)));
+    return { open, done };
+  }
+  let openSubs = new Set();
+  try { openSubs = new Set(JSON.parse(store.get('kal-subs') || '[]')); } catch (e) {}
+  const saveSubs = () => store.set('kal-subs', JSON.stringify([...openSubs]));
+  let uid = 0, refocus = null;
+  function taskItem(t, showProject, isSub) {
     const li = document.createElement('li'); const id = 'tk' + (uid++);
     if (t.done) li.className = 'done';
     const meta = [dueLabel(t), todo.token && showProject ? esc(t.project) : ''].filter(Boolean).join(' · ');
@@ -788,6 +809,31 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       x.type = 'button'; x.className = 'del'; x.textContent = '✕'; x.setAttribute('aria-label', 'Odstrániť ' + t.t);
       x.addEventListener('click', ev => { ev.preventDefault(); remove(t); });
       li.appendChild(x);
+    } else if (todo.token && !isSub) {
+      // Small arrow under the right edge: opens the subtasks and a field to add more
+      const subs = subsOf(t.id), expanded = openSubs.has(String(t.id));
+      const total = subs.open.length + subs.done.length;
+      li.classList.add('hasexp');
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'exp' + (expanded ? ' on' : '');
+      b.innerHTML = (total ? '<span>' + subs.done.length + '/' + total + '</span>' : '') + '▾';
+      b.setAttribute('aria-expanded', String(expanded)); b.setAttribute('aria-label', 'Podúlohy: ' + t.t);
+      b.addEventListener('click', ev => {
+        ev.preventDefault(); const k = String(t.id);
+        openSubs.has(k) ? openSubs.delete(k) : openSubs.add(k); saveSubs(); renderTasks();
+      });
+      li.appendChild(b);
+      if (expanded) {
+        const ul = document.createElement('ul'); ul.className = 'tasks subtasks';
+        subs.open.forEach(s => ul.appendChild(taskItem(s, false, true)));
+        subs.done.forEach(s => ul.appendChild(taskItem(s, false, true)));
+        const f = document.createElement('form'); f.className = 'addrow';
+        f.innerHTML = '<input type="text" placeholder="Nová podúloha" aria-label="Pridať podúlohu do ' + esc(t.t) + '"><button type="submit">+</button>';
+        f.addEventListener('submit', ev => { ev.preventDefault(); const v = f.querySelector('input').value.trim(); if (v) { refocus = t.id; addTask(v, null, t.id); } });
+        if (refocus === t.id) setTimeout(() => f.querySelector('input').focus(), 0);
+        const box = document.createElement('div'); box.className = 'subbox';
+        box.appendChild(ul); box.appendChild(f); li.appendChild(box);
+      }
     }
     return li;
   }
@@ -909,9 +955,11 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       $('board').appendChild(f);
     }
   }
-  async function addTask(v, projectId) {
+  async function addTask(v, projectId, parentId) {
     if (!todo.token) { local.push({ t: v, done: false }); saveLocal(); renderTasks(); return; }
-    try { await td('tasks', { method: 'POST', body: JSON.stringify(projectId ? { content: v, project_id: projectId } : { content: v }) }); }
+    const body = { content: v };
+    if (parentId) body.parent_id = parentId; else if (projectId) body.project_id = projectId;
+    try { await td('tasks', { method: 'POST', body: JSON.stringify(body) }); }
     catch (err) { todo.error = 'Úlohu sa nepodarilo pridať do Todoist'; }
     loadTodoist();
   }
