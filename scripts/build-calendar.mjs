@@ -258,8 +258,9 @@ async function load({ p, url }) {
         s: ev.start.allDay ? isoDate(occ.startTs) : new Date(occ.startTs).toISOString(),
         e: ev.start.allDay ? isoDate(occ.endTs) : new Date(occ.endTs).toISOString(),
         loc: ev.location || undefined,
-        d: ev.description || undefined,
-        u: ev.join || undefined,
+        // Work meetings are view-only at home: no join links, no links in the text
+        d: (p === 'work' ? ev.description.replace(/\S*https?:\/\/\S+/g, '').replace(/[ \t]{2,}/g, ' ').trim() : ev.description) || undefined,
+        u: p === 'work' ? undefined : ev.join || undefined,
         o: ev.organizer || undefined,
         at: ev.attendees.length ? ev.attendees.slice(0, 40) : undefined
       });

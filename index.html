@@ -575,6 +575,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     else if (e.e <= n) state = 'Už skončilo';
     const row = (label, html) => html ? '<div class="dr"><span class="dl">' + label + '</span><div>' + html + '</div></div>' : '';
     const pf = platform(e);
+    if (e.p === 'work') e = Object.assign({}, e, { join: undefined });
     const att = e.att || [];
     $('evBox').style.setProperty('--c', C[e.p]);
     $('evBody').innerHTML =
