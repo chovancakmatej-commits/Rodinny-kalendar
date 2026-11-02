@@ -314,6 +314,12 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   background: var(--panel) repeating-linear-gradient(transparent 0 63px, color-mix(in srgb, var(--p-work) 35%, transparent) 63px 64px) local; }
 .padbox textarea:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
 
+/* Sleep: black screen, wake lock released so Android can switch the display off */
+.sleep { position: fixed; inset: 0; z-index: 90; background: #000; display: grid; place-items: center; cursor: pointer; }
+.sleep span { color: #444; font-size: .9rem; transition: opacity 2s; }
+.sleep span.off { opacity: 0; }
+.lockbox input[type=time] { font-size: 1.1rem; padding: 8px 10px; }
+
 /* Weather */
 .wx { all: unset; display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 12px; cursor: pointer; flex: none; }
 .wx:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
@@ -442,6 +448,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       <button class="ss" id="clearDone" type="button" hidden>Vymazať hotové</button>
       <button class="ss" id="ssBtn" type="button">Slideshow</button>
       <button class="ss" id="phBtn" type="button">Fotky</button>
+      <button class="ss" id="slBtn" type="button">☾ Spánok</button>
       <span class="note"><span id="status">Načítavam kalendár…</span> · slideshow po <span id="idleS">45</span> s nečinnosti</span>
     </div>
   </aside>
@@ -506,6 +513,19 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     <div class="row"><button type="submit">Uložiť</button><button type="button" class="sec" id="nmCancel">Zrušiť</button></div>
   </form>
 </div>
+
+<div class="lock" id="slDlg" hidden>
+  <form class="lockbox" id="slForm">
+    <h1>Spánok</h1>
+    <p>Obrazovka sa vypne a aplikácia ostane spustená. Na zobudenie stačí rozsvietiť displej a ťuknúť.</p>
+    <button type="button" id="slNow">☾ Uspať teraz</button>
+    <label class="nmrow"><input type="checkbox" id="slOn" style="flex:none;width:24px;height:24px"> Plánovaný spánok každý deň</label>
+    <div class="row"><label class="nmrow">od <input type="time" id="slFrom" value="23:00"></label><label class="nmrow">do <input type="time" id="slTo" value="06:30"></label></div>
+    <div class="row"><button type="submit">Uložiť</button><button type="button" class="sec" id="slCancel">Zrušiť</button></div>
+  </form>
+</div>
+
+<div class="sleep" id="sleep" hidden><span id="sleepHint">Ťukni pre zobudenie</span></div>
 
 <div class="undo" id="undo" hidden role="status"><span id="undoText"></span><button type="button" id="undoBtn">Späť</button></div>
 
@@ -1475,13 +1495,54 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   let sTimer = null, idleTimer = null;
   buildSlides(); loadPhotos();
   function next() { if (!slides.length) return; slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
-  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden || !$('padDlg').hidden || !$('nmDlg').hidden) return; show.hidden = false; renderSsDay(); next(); sTimer = setInterval(next, 8000); }
+  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden || !$('padDlg').hidden || !$('nmDlg').hidden || !$('slDlg').hidden || !$('sleep').hidden) return; show.hidden = false; renderSsDay(); next(); sTimer = setInterval(next, 8000); }
   function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
   function armIdle() { clearTimeout(idleTimer); if (show.hidden) idleTimer = setTimeout(startShow, IDLE_S * 1000); }
   $('idleS').textContent = IDLE_S;
   $('ssBtn').addEventListener('click', e => { e.stopPropagation(); clearTimeout(idleTimer); startShow(); });
   show.addEventListener('click', stopShow);
   ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { if (show.hidden) armIdle(); }, { passive: true }));
+
+  // ---------- sleep: by button, or every night on a schedule ----------
+  let slCfg = { on: false, from: '23:00', to: '06:30' };
+  try { Object.assign(slCfg, JSON.parse(store.get('kal-sleep') || '{}')); } catch (e) {}
+  let sleepBy = null;           // 'button' | 'plan' | null
+  let lastAct = Date.now();
+  const mins = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  function inPlan(d = new Date()) {
+    if (!slCfg.on) return false;
+    const n = d.getHours() * 60 + d.getMinutes(), a = mins(slCfg.from), b = mins(slCfg.to);
+    return a <= b ? n >= a && n < b : n >= a || n < b;
+  }
+  function goSleep(by) {
+    sleepBy = by; stopShow(); clearTimeout(idleTimer);
+    $('slDlg').hidden = true; $('sleep').hidden = false;
+    $('sleepHint').classList.remove('off'); setTimeout(() => $('sleepHint').classList.add('off'), 4000);
+    window.kalSleep(true);
+  }
+  function wake() {
+    if (!sleepBy) return;
+    sleepBy = null; lastAct = Date.now(); $('sleep').hidden = true;
+    window.kalSleep(false); load(); loadTodoist(); armIdle();
+  }
+  $('sleep').addEventListener('click', wake);
+  $('slBtn').addEventListener('click', () => {
+    $('slOn').checked = slCfg.on; $('slFrom').value = slCfg.from; $('slTo').value = slCfg.to; $('slDlg').hidden = false;
+  });
+  $('slNow').addEventListener('click', () => goSleep('button'));
+  $('slCancel').addEventListener('click', () => { $('slDlg').hidden = true; });
+  $('slForm').addEventListener('submit', ev => {
+    ev.preventDefault();
+    slCfg = { on: $('slOn').checked, from: $('slFrom').value || '23:00', to: $('slTo').value || '06:30' };
+    store.set('kal-sleep', JSON.stringify(slCfg)); $('slDlg').hidden = true; lastAct = Date.now();
+  });
+  ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { lastAct = Date.now(); }, { passive: true }));
+  // During the planned night: sleep after 5 quiet minutes (so someone using it at night is not cut off); morning: wake up
+  setInterval(() => {
+    if (sleepBy === 'plan' && !inPlan()) wake();
+    else if (!sleepBy && inPlan() && Date.now() - lastAct > 5 * 60000) goSleep('plan');
+  }, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && sleepBy === 'plan' && !inPlan()) wake(); });
 
   setInterval(tick, 10000);
   setInterval(load, RELOAD_MIN * 60000);
@@ -1492,7 +1553,10 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 </script>
 <script>
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-async function keepAwake() { try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch (e) {} }
+// Screen stays on while the app is open, except in sleep mode, when Android may switch it off as usual
+let wakeLock = null, sleeping = false;
+async function keepAwake() { try { if (!sleeping && navigator.wakeLock && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch (e) {} }
+window.kalSleep = on => { sleeping = on; if (on) { if (wakeLock) wakeLock.release().catch(() => {}); } else keepAwake(); };
 keepAwake(); document.addEventListener('visibilitychange', () => { if (!document.hidden) keepAwake(); });
 </script>
 </body></html>
