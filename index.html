@@ -72,7 +72,12 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .next .count { font-family: var(--display); font-weight: 700; font-size: 1.5rem; white-space: nowrap; }
 .next .what { font-weight: 600; font-size: 1.05rem; }
 .next .meta { font-size: .85rem; opacity: .85; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .85rem; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .85rem; color: var(--muted); font: inherit; font-size: .85rem; background: none; border: 0; padding: 4px 6px; border-radius: 8px; cursor: pointer; }
+.legend:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.legend:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
+.nmrow { display: flex; align-items: center; gap: 10px; }
+.nmrow .dot { width: 14px; height: 14px; }
+.nmrow input { flex: 1; min-width: 0; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 
 /* Month grid */
@@ -406,12 +411,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   <section class="panel cal" aria-label="Mesačný kalendár">
     <div class="calhead">
       <div class="m" id="month"></div>
-      <div class="legend">
-        <span><i class="dot" style="--c:var(--p-work)"></i>Mato práca</span>
-        <span><i class="dot" style="--c:var(--p-me)"></i>Mato</span>
-        <span><i class="dot" style="--c:var(--p-wife)"></i>Manželka</span>
-        <span><i class="dot" style="--c:var(--p-fam)"></i>Spoločné</span>
-      </div>
+      <button type="button" class="legend" id="legend" aria-label="Kalendáre, ťukni pre premenovanie"></button>
       <div class="ctrl">
         <button type="button" id="prevBtn" aria-label="Predchádzajúce obdobie">‹</button>
         <button type="button" id="todayBtn">Dnes</button>
@@ -495,6 +495,18 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   </form>
 </div>
 
+<div class="lock" id="nmDlg" hidden>
+  <form class="lockbox" id="nmForm">
+    <h1>Názvy kalendárov</h1>
+    <p>Pomenuj kalendáre podľa seba. Názvy si pamätá toto zariadenie.</p>
+    <label class="nmrow"><i class="dot" style="--c:var(--p-work)"></i><input id="nm-work" maxlength="24" aria-label="Pracovný kalendár"></label>
+    <label class="nmrow"><i class="dot" style="--c:var(--p-me)"></i><input id="nm-me" maxlength="24" aria-label="Môj kalendár"></label>
+    <label class="nmrow"><i class="dot" style="--c:var(--p-wife)"></i><input id="nm-wife" maxlength="24" aria-label="Kalendár manželky"></label>
+    <label class="nmrow"><i class="dot" style="--c:var(--p-fam)"></i><input id="nm-fam" maxlength="24" aria-label="Spoločný kalendár"></label>
+    <div class="row"><button type="submit">Uložiť</button><button type="button" class="sec" id="nmCancel">Zrušiť</button></div>
+  </form>
+</div>
+
 <div class="undo" id="undo" hidden role="status"><span id="undoText"></span><button type="button" id="undoBtn">Späť</button></div>
 
 <div class="show" id="show" hidden>
@@ -525,7 +537,10 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 <script>
 (function () {
   const C = { work: 'var(--p-work)', me: 'var(--p-me)', wife: 'var(--p-wife)', fam: 'var(--p-fam)' };
-  const WHO = { work: 'Mato práca', me: 'Mato', wife: 'Manželka', fam: 'Spoločné' };
+  // Calendar names: defaults, renamed per device in the "Názvy kalendárov" dialog (tap the legend)
+  const WHO_DEF = { work: 'Mato práca', me: 'Mato', wife: 'Janka', fam: 'Spoločné' };
+  const WHO = Object.assign({}, WHO_DEF);
+  try { Object.assign(WHO, JSON.parse(localStorage.getItem('kal-names') || '{}')); } catch (e) {}
   const IDLE_S = 45;
   const RELOAD_MIN = 5;
   const $ = id => document.getElementById(id);
@@ -685,7 +700,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       return '<div class="ev' + (past ? ' past' : '') + (e === nx ? ' nextup' : '') + (isHl(e) ? ' hl' : '') + '" role="button" tabindex="0" data-i="' + e.i + '" style="--c:' + C[e.p] + '">' +
         (e === nx ? '<span class="badge">Najbližšie</span>' : '') +
         '<div class="tm tnum">' + (e.allDay ? 'Celý deň' : hm(e.s) + '–' + hm(e.e)) + '</div>' +
-        '<div class="tt">' + (e.imp ? '! ' : '') + esc(e.t) + '</div><div class="who">' + WHO[e.p] + (e.where ? ' · ' + esc(e.where) : '') + '</div></div>';
+        '<div class="tt">' + (e.imp ? '! ' : '') + esc(e.t) + '</div><div class="who">' + esc(WHO[e.p]) + (e.where ? ' · ' + esc(e.where) : '') + '</div></div>';
     }).join('') : '<div class="empty">Žiadne udalosti</div>';
     const focus = $('evrow').querySelector('.nextup');
     $('evrow').scrollLeft = focus ? focus.offsetLeft - $('evrow').firstElementChild.offsetLeft : 0;
@@ -739,7 +754,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const att = e.att || [];
     $('evBox').style.setProperty('--c', C[e.p]);
     $('evBody').innerHTML =
-      '<div class="dwho">' + WHO[e.p] + '</div>' +
+      '<div class="dwho">' + esc(WHO[e.p]) + '</div>' +
       '<h1 id="evTitle">' + (e.imp ? '! ' : '') + esc(e.t) + '</h1>' +
       '<div class="dwhen">' + esc(when) + '</div>' +
       (state ? '<div class="dstate">' + state + '</div>' : '') +
@@ -780,7 +795,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     past.slice(0, Math.max(0, past.length - 2)).forEach(e => list.splice(list.indexOf(e), 1));
     const used = ['work', 'me', 'wife', 'fam'].filter(p => list.some(e => e.p === p));
     $('ssCols').innerHTML = list.length
-      ? '<div class="sflegend">' + used.map(p => '<span style="--c:' + SC[p] + '"><i></i>' + WHO[p] + '</span>').join('') + '</div><div class="sflist">' +
+      ? '<div class="sflegend">' + used.map(p => '<span style="--c:' + SC[p] + '"><i></i>' + esc(WHO[p]) + '</span>').join('') + '</div><div class="sflist">' +
         list.map(e => {
           const st = e.allDay ? '' : e.e <= n ? ' past' : e.s <= n ? ' now' : e === nextUp ? ' upn' : '';
           return '<div class="sfev' + st + (isHl(e) ? ' hl' : '') + '" style="--c:' + SC[e.p] + '"><div class="tm">' + (e.allDay ? 'celý deň' : hm(e.s) + '–' + hm(e.e)) + '</div><div class="tt">' + (e.imp ? '! ' : '') + esc(e.t) + '</div></div>';
@@ -816,7 +831,28 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 
   // ---------- what is going on right now ----------
   const plain = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const WHOS = { work: 'Matej', me: 'Matej', wife: 'Manželka', fam: 'Rodina' };
+  const WHOS = {};
+  function syncWhos() {
+    const me = WHO.me === WHO_DEF.me ? 'Matej' : WHO.me;
+    Object.assign(WHOS, { work: me, me, wife: WHO.wife, fam: 'Rodina' });
+  }
+  syncWhos();
+  function renderLegend() {
+    $('legend').innerHTML = ['work', 'me', 'wife', 'fam'].map(p => '<span><i class="dot" style="--c:var(--p-' + p + ')"></i>' + esc(WHO[p]) + '</span>').join('');
+  }
+  renderLegend();
+  $('legend').addEventListener('click', () => {
+    ['work', 'me', 'wife', 'fam'].forEach(p => { $('nm-' + p).value = WHO[p]; });
+    $('nmDlg').hidden = false;
+  });
+  $('nmCancel').addEventListener('click', () => { $('nmDlg').hidden = true; });
+  $('nmForm').addEventListener('submit', ev => {
+    ev.preventDefault();
+    const saved = {};
+    ['work', 'me', 'wife', 'fam'].forEach(p => { const v = $('nm-' + p).value.trim(); WHO[p] = v || WHO_DEF[p]; if (v && v !== WHO_DEF[p]) saved[p] = v; });
+    store.set('kal-names', JSON.stringify(saved));
+    syncWhos(); renderLegend(); $('nmDlg').hidden = true; render();
+  });
   function platform(e) {
     const x = plain(e.where + ' ' + e.t);
     if (/teams/.test(x)) return 'Teams';
@@ -841,7 +877,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       [/focus|sustred|deep work/, 'pracuje sústredene']
     ];
     for (const [re, txt] of rules) if (re.test(x)) return who + ' ' + txt;
-    if (e.busy) return who + ' je zaneprázdnený';
+    if (e.busy) return who + (e.p === 'wife' ? ' je zaneprázdnená' : ' je zaneprázdnený');
     if (platform(e)) return who + ' je na online meetingu';
     if (e.p === 'work') return who + ' je na meetingu';
     return null;
@@ -1439,7 +1475,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   let sTimer = null, idleTimer = null;
   buildSlides(); loadPhotos();
   function next() { if (!slides.length) return; slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
-  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden || !$('padDlg').hidden) return; show.hidden = false; renderSsDay(); next(); sTimer = setInterval(next, 8000); }
+  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden || !$('padDlg').hidden || !$('nmDlg').hidden) return; show.hidden = false; renderSsDay(); next(); sTimer = setInterval(next, 8000); }
   function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
   function armIdle() { clearTimeout(idleTimer); if (show.hidden) idleTimer = setTimeout(startShow, IDLE_S * 1000); }
   $('idleS').textContent = IDLE_S;
