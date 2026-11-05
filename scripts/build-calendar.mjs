@@ -21,7 +21,8 @@ function parseCalendars(rows) {
   const out = [];
   let pending = null;
   for (const row of rows) {
-    const m = row.match(/(https?|webcal):\/\/\S+/i);
+    // URL stops at spaces, brackets and quotes, so "praca <https://…>" copied from an example still works
+    const m = row.match(/(https?|webcal):\/\/[^\s<>"'`]+/i);
     const word = (m ? row.slice(0, m.index) : row).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
     const who = PERSON[word] || (word && (
       /^(prac|work|job|firm)/.test(word) ? 'work' :
@@ -290,7 +291,7 @@ for (const [i, cal] of calendars.entries()) {
   } catch (e) {
     // Never print the URL itself, it is a secret
     errors.push(i + 1);
-    console.log(`::warning::Kalendár ${i + 1}: chyba – ${e.message}`);
+    console.log(`::warning::Kalendár ${i + 1} (${LABEL[cal.p]}): chyba – ${e.message}`);
   }
 }
 events.sort((x, y) => (x.s < y.s ? -1 : x.s > y.s ? 1 : 0));
