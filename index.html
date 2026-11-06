@@ -810,17 +810,17 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const nextUp = evs.find(e => !e.allDay && e.s > n);
     const SC = { work: '#6f9ae0', me: '#3fbca6', wife: '#d277ac', fam: '#e3a83a' };   // bright variants that read on the dark screen
     const list = evs.slice().sort((x, y) => (y.allDay - x.allDay) || (x.s - y.s));
-    // Busy days: keep only the last two finished events so what is coming stays on screen
-    const past = list.filter(e => !e.allDay && e.e <= n);
-    past.slice(0, Math.max(0, past.length - 2)).forEach(e => list.splice(list.indexOf(e), 1));
+    // Finished events are left out; all-day ones stay
+    for (let i = list.length - 1; i >= 0; i--) if (!list[i].allDay && list[i].e <= n) list.splice(i, 1);
+    const noneLeft = !list.some(e => !e.allDay);
     const used = ['work', 'me', 'wife', 'fam'].filter(p => list.some(e => e.p === p));
     $('ssCols').innerHTML = list.length
       ? '<div class="sflegend">' + used.map(p => '<span style="--c:' + SC[p] + '"><i></i>' + esc(WHO[p]) + '</span>').join('') + '</div><div class="sflist">' +
         list.map(e => {
           const st = e.allDay ? '' : e.e <= n ? ' past' : e.s <= n ? ' now' : e === nextUp ? ' upn' : '';
           return '<div class="sfev' + st + (isHl(e) ? ' hl' : '') + '" style="--c:' + SC[e.p] + '"><div class="tm">' + (e.allDay ? 'celý deň' : hm(e.s) + '–' + hm(e.e)) + '</div><div class="tt">' + (e.imp ? '! ' : '') + esc(e.t) + '</div></div>';
-        }).join('') + '</div>'
-      : '<div class="sfempty">Dnes nič v kalendári</div>';
+        }).join('') + (noneLeft ? '<div class="sfempty">Na dnes už nič ďalšie</div>' : '') + '</div>'
+      : '<div class="sfempty">' + (evs.length ? 'Na dnes už nič ďalšie' : 'Dnes nič v kalendári') + '</div>';
   }
 
   function buildSsMonth() {
