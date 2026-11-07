@@ -1345,20 +1345,24 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   const deg = v => Math.round(v) + '°';
   let wxData = null;
   try { wxData = JSON.parse(store.get('kal-wx') || 'null'); } catch (e) {}
+  // Ask for the current position on every refresh, so the weather follows the tablet; the last known place is the fallback
   function wxPlace() {
     let saved = null; try { saved = JSON.parse(store.get('kal-wx-loc') || 'null'); } catch (e) {}
-    if (saved) return Promise.resolve(saved);
-    const fallback = { lat: 48.1486, lon: 17.1077, name: 'Bratislava' };
+    const fallback = saved || { lat: 48.1486, lon: 17.1077, name: 'Bratislava', approx: true };
     return new Promise(res => {
       if (!navigator.geolocation) return res(fallback);
       navigator.geolocation.getCurrentPosition(async pos => {
         const loc = { lat: +pos.coords.latitude.toFixed(3), lon: +pos.coords.longitude.toFixed(3), name: '' };
-        try {
-          const g = await (await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + loc.lat + '&longitude=' + loc.lon + '&localityLanguage=sk')).json();
-          loc.name = g.city || g.locality || '';
-        } catch (e) {}
+        const near = saved && !saved.approx && Math.abs(saved.lat - loc.lat) < .01 && Math.abs(saved.lon - loc.lon) < .015;
+        if (near && saved.name) loc.name = saved.name;
+        else {
+          try {
+            const g = await (await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + loc.lat + '&longitude=' + loc.lon + '&localityLanguage=sk')).json();
+            loc.name = g.city || g.locality || '';
+          } catch (e) {}
+        }
         store.set('kal-wx-loc', JSON.stringify(loc)); res(loc);
-      }, () => res(fallback), { timeout: 15000, maximumAge: 86400000 });
+      }, () => res(fallback), { timeout: 12000, maximumAge: 10 * 60000, enableHighAccuracy: false });
     });
   }
   async function loadWeather() {
@@ -1369,23 +1373,29 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
         '&hourly=temperature_2m,weather_code,precipitation_probability,is_day' +
         '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=4&timezone=auto');
       if (!r.ok) throw new Error(r.status);
-      wxData = Object.assign(await r.json(), { place: loc.name, at: Date.now() });
+      wxData = Object.assign(await r.json(), { place: loc.name, approx: !!loc.approx, at: Date.now() });
       store.set('kal-wx', JSON.stringify(wxData));
     } catch (e) {}
     renderWeather();
   }
   function renderWeather() {
     const d = wxData;
-    if (!d || !d.current || Date.now() - d.at > 6 * 3600000) { $('wx').hidden = true; $('ssWx').hidden = true; return; }
+    if (!d || !d.current || Date.now() - d.at > 6 * 3600000) {
+      // Keep the spot visible so it is clear the weather is coming; a tap retries
+      $('wx').hidden = false; $('ssWx').hidden = true;
+      $('wx').innerHTML = '<span class="ic" aria-hidden="true">🌡️</span><span class="sm" style="display:block">Počasie sa načítava…<br>ťukni pre obnovenie</span>';
+      return;
+    }
+    const place = d.place ? esc(d.place) + (d.approx ? ' (bez polohy)' : '') : '';
     const c = d.current, w = wxInfo(c.weather_code, c.is_day);
     const mx = d.daily.temperature_2m_max[0], mn = d.daily.temperature_2m_min[0];
     $('wx').hidden = false;
     $('wx').innerHTML = '<span class="ic" aria-hidden="true">' + w.ic + '</span><span><span class="tp tnum">' + deg(c.temperature_2m) + '</span>' +
-      '<span class="sm">' + esc(w.txt) + ' · ' + deg(mx) + ' / ' + deg(mn) + '</span></span>';
+      '<span class="sm">' + esc(w.txt) + ' · ' + deg(mx) + ' / ' + deg(mn) + (place ? '<br>📍 ' + place : '') + '</span></span>';
     $('wx').querySelector('.sm').style.display = 'block';
     $('ssWx').hidden = false;
     $('ssWx').innerHTML = '<span class="ic" aria-hidden="true">' + w.ic + '</span><div><div class="tp tnum">' + deg(c.temperature_2m) + '</div>' +
-      '<div class="sm">' + esc(w.txt) + (d.place ? ' · ' + esc(d.place) : '') + '</div><div class="sm">' + deg(mx) + ' / ' + deg(mn) + '</div></div>';
+      '<div class="sm">' + esc(w.txt) + (place ? ' · 📍 ' + place : '') + '</div><div class="sm">' + deg(mx) + ' / ' + deg(mn) + '</div></div>';
   }
   function openWeather() {
     const d = wxData; if (!d) return;
@@ -1398,6 +1408,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const dayName = (t, i) => i === 1 ? 'Zajtra' : new Date(t + 'T12:00').toLocaleDateString('sk-SK', { weekday: 'long' });
     $('wxBody').innerHTML =
       '<h1 id="wxTitle">Počasie' + (d.place ? ' · ' + esc(d.place) : '') + '</h1>' +
+      (d.approx ? '<p class="src">Tablet nedal prístup k polohe, preto ukazujem ' + esc(d.place) + '. Povoľ polohu pre túto aplikáciu v Nastaveniach › Aplikácie › Chrome › Povolenia › Poloha.</p>' : '') +
       '<div class="cur"><span class="ic" aria-hidden="true">' + w.ic + '</span><div><div class="tp tnum">' + deg(c.temperature_2m) + '</div>' +
       '<div>' + esc(w.txt) + ' · pocitovo ' + deg(c.apparent_temperature) + ' · vietor ' + Math.round(c.wind_speed_10m) + ' km/h</div></div></div>' +
       '<div class="hrs">' + hrs.map(i => '<div><b class="tnum">' + new Date(d.hourly.time[i]).getHours() + ':00</b><span class="i" aria-hidden="true">' +
@@ -1412,11 +1423,12 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       '<div class="src">Aktualizované ' + hm(new Date(d.at)) + ' · Open-Meteo</div>';
     $('wxDlg').hidden = false; $('wxClose').focus();
   }
-  $('wx').addEventListener('click', openWeather);
+  $('wx').addEventListener('click', () => { if (wxData && wxData.current && Date.now() - wxData.at <= 6 * 3600000) openWeather(); else loadWeather(); });
   $('wxClose').addEventListener('click', () => { $('wxDlg').hidden = true; });
   $('wxDlg').addEventListener('click', ev => { if (ev.target === $('wxDlg')) $('wxDlg').hidden = true; });
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape') $('wxDlg').hidden = true; });
-  renderWeather(); loadWeather(); setInterval(loadWeather, 30 * 60000);
+  renderWeather(); loadWeather(); setInterval(loadWeather, 15 * 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && (!wxData || Date.now() - wxData.at > 10 * 60000)) loadWeather(); });
 
   // ---------- slideshow: family photos picked on this device (kept in IndexedDB), geometric background until then ----------
   const show = $('show');
@@ -1523,7 +1535,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   function wake() {
     if (!sleepBy) return;
     sleepBy = null; lastAct = Date.now(); $('sleep').hidden = true;
-    window.kalSleep(false); load(); loadTodoist(); armIdle();
+    window.kalSleep(false); load(); loadTodoist(); loadWeather(); armIdle();
   }
   $('sleep').addEventListener('click', wake);
   $('slBtn').addEventListener('click', () => {
