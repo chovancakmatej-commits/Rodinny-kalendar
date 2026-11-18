@@ -1550,7 +1550,8 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 
   // ---------- Spotify remote (Web API, PKCE login in the browser; Client ID entered per device) ----------
   const SP_SCOPES = 'user-read-playback-state user-modify-playback-state user-read-currently-playing';
-  const spRedirect = location.origin + location.pathname;
+  // Always the same address, whatever path the app was opened from (index.html, other letter case), so it matches the Spotify dashboard exactly
+  const spRedirect = /github\.io$/.test(location.hostname) ? 'https://chovancakmatej-commits.github.io/Rodinny-kalendar/' : location.origin + location.pathname.replace(/index\.html$/, '');
   const sp = { client: store.get('kal-sp-client') || '', tok: null, state: null, msg: '' };
   try { sp.tok = JSON.parse(store.get('kal-sp') || 'null'); } catch (e) {}
   const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
