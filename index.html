@@ -372,6 +372,18 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .wxbody .day3 .t { font-weight: 700; white-space: nowrap; }
 .wxbody .day3 .t span { color: var(--muted); font-weight: 400; }
 .wxbody .src { color: var(--muted); font-size: .75rem; }
+.wxbody > * { flex-shrink: 0; }
+.wxbody .wxh { font-size: 1rem; margin: 4px 0 0; }
+.wx3 { display: flex; gap: 14px; text-align: center; }
+.wx3 > div { display: flex; flex-direction: column; align-items: center; min-width: 46px; line-height: 1.15; }
+.wx3 b { font-size: .85rem; }
+.wx3 .i { font-size: 1.5rem; margin: 2px 0; }
+.wx3 .pp { font-size: .72rem; opacity: .8; }
+.wx3 .mm { font-size: .85rem; font-weight: 700; white-space: nowrap; }
+.wx3 .mm span { opacity: .65; font-weight: 400; }
+.wx .wx3 { margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--line); }
+.sswx .wx3 { margin-top: 10px; gap: 22px; }
+.sswx .wx3 b { font-size: 1rem; } .sswx .wx3 .i { font-size: 1.9rem; } .sswx .wx3 .pp { font-size: .85rem; } .sswx .wx3 .mm { font-size: 1.05rem; }
 .ssmonth .mt { font-family: var(--display); font-weight: 700; font-size: 1.2rem; text-transform: capitalize; margin-bottom: 8px; }
 .ssmonth .mg { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-variant-numeric: tabular-nums; }
 .ssmonth .mg span { padding: 5px 0 7px; position: relative; font-size: .95rem; border-radius: 50%; }
@@ -1452,12 +1464,28 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat + '&longitude=' + loc.lon +
         '&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m' +
         '&hourly=temperature_2m,weather_code,precipitation_probability,is_day' +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=4&timezone=auto');
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=10&timezone=auto');
       if (!r.ok) throw new Error(r.status);
       wxData = Object.assign(await r.json(), { place: loc.name, approx: !!loc.approx, at: Date.now() });
       store.set('kal-wx', JSON.stringify(wxData));
     } catch (e) {}
     renderWeather();
+  }
+  // Short day label: Dnes, then Slovak weekday abbreviation (Št, Pi, ...)
+  function wxDay(t, i, long) {
+    if (i === 0) return 'Dnes';
+    if (i === 1 && long) return 'Zajtra';
+    const w = new Date(t + 'T12:00').toLocaleDateString('sk-SK', { weekday: long ? 'long' : 'short' });
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }
+  // Three-day strip (today + 2), like the Frameo weather widget
+  function wx3(d) {
+    return '<div class="wx3">' + [0, 1, 2].filter(i => d.daily.time[i] != null).map(i => {
+      const x = wxInfo(d.daily.weather_code[i]), pp = d.daily.precipitation_probability_max[i];
+      return '<div><b>' + wxDay(d.daily.time[i], i) + '</b><span class="i" aria-hidden="true">' + x.ic + '</span>' +
+        '<span class="pp tnum">💧' + (pp == null ? 0 : pp) + ' %</span>' +
+        '<span class="mm tnum">' + deg(d.daily.temperature_2m_max[i]) + ' <span>' + deg(d.daily.temperature_2m_min[i]) + '</span></span></div>';
+    }).join('') + '</div>';
   }
   function renderWeather() {
     const d = wxData;
@@ -1469,14 +1497,13 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     }
     const place = d.place ? esc(d.place) + (d.approx ? ' (bez polohy)' : '') : '';
     const c = d.current, w = wxInfo(c.weather_code, c.is_day);
-    const mx = d.daily.temperature_2m_max[0], mn = d.daily.temperature_2m_min[0];
     $('wx').hidden = false;
     $('wx').innerHTML = '<span class="ic" aria-hidden="true">' + w.ic + '</span><span><span class="tp tnum">' + deg(c.temperature_2m) + '</span>' +
-      '<span class="sm">' + esc(w.txt) + ' · ' + deg(mx) + ' / ' + deg(mn) + (place ? '<br>📍 ' + place : '') + '</span></span>';
+      '<span class="sm">' + esc(w.txt) + (place ? '<br>📍 ' + place : '') + '</span></span>' + wx3(d);
     $('wx').querySelector('.sm').style.display = 'block';
     $('ssWx').hidden = false;
     $('ssWx').innerHTML = '<span class="ic" aria-hidden="true">' + w.ic + '</span><div><div class="tp tnum">' + deg(c.temperature_2m) + '</div>' +
-      '<div class="sm">' + esc(w.txt) + (place ? ' · 📍 ' + place : '') + '</div><div class="sm">' + deg(mx) + ' / ' + deg(mn) + '</div></div>';
+      '<div class="sm">' + esc(w.txt) + (place ? ' · 📍 ' + place : '') + '</div>' + wx3(d) + '</div>';
   }
   function openWeather() {
     const d = wxData; if (!d) return;
@@ -1486,7 +1513,6 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       const at = new Date(t).getTime();
       if (at > n - 1800000 && hrs.length < 12 && new Date(t).getHours() % 2 === 0) hrs.push(i);
     });
-    const dayName = (t, i) => i === 1 ? 'Zajtra' : new Date(t + 'T12:00').toLocaleDateString('sk-SK', { weekday: 'long' });
     $('wxBody').innerHTML =
       '<h1 id="wxTitle">Počasie' + (d.place ? ' · ' + esc(d.place) : '') + '</h1>' +
       (d.approx ? '<p class="src">Tablet nedal prístup k polohe, preto ukazujem ' + esc(d.place) + '. Povoľ polohu pre túto aplikáciu v Nastaveniach › Aplikácie › Chrome › Povolenia › Poloha.</p>' : '') +
@@ -1495,9 +1521,9 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       '<div class="hrs">' + hrs.map(i => '<div><b class="tnum">' + new Date(d.hourly.time[i]).getHours() + ':00</b><span class="i" aria-hidden="true">' +
         wxInfo(d.hourly.weather_code[i], d.hourly.is_day[i]).ic + '</span><span class="tnum">' + deg(d.hourly.temperature_2m[i]) + '</span>' +
         (d.hourly.precipitation_probability[i] >= 20 ? '<br><span class="tnum" style="color:var(--p-work)">' + d.hourly.precipitation_probability[i] + ' %</span>' : '') + '</div>').join('') + '</div>' +
-      '<div class="days">' + [1, 2, 3].filter(i => d.daily.time[i]).map(i => {
+      '<h2 class="wxh">Predpoveď na 10 dní</h2><div class="days">' + d.daily.time.map((t, i) => i).map(i => {
         const x = wxInfo(d.daily.weather_code[i]);
-        return '<div class="day3"><span class="n">' + dayName(d.daily.time[i], i) + '</span><span class="i" aria-hidden="true">' + x.ic + '</span>' +
+        return '<div class="day3"><span class="n">' + wxDay(d.daily.time[i], i, true) + '</span><span class="i" aria-hidden="true">' + x.ic + '</span>' +
           '<span class="d">' + esc(x.txt) + (d.daily.precipitation_probability_max[i] >= 20 ? ' · zrážky ' + d.daily.precipitation_probability_max[i] + ' %' : '') + '</span>' +
           '<span class="t tnum">' + deg(d.daily.temperature_2m_max[i]) + ' <span>/ ' + deg(d.daily.temperature_2m_min[i]) + '</span></span></div>';
       }).join('') + '</div>' +
