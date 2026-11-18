@@ -329,6 +329,9 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .show .cap { position: absolute; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top, 0px)); color: rgba(255,255,255,.55); font-size: .8rem; }
 
 #newTask { font-size: 1.15rem; padding: 14px 14px; }
+.addrow .micbtn { font-size: 1.2rem; padding: 8px 12px; }
+.lockbox button.padmic.on { background: #e2463a; color: #fff; border-color: #e2463a; animation: micpulse 1.2s ease-in-out infinite; }
+@keyframes micpulse { 50% { opacity: .65; } }
 /* Big lined writing pad: opens from any add-task field so the pen has room */
 .lock.paddlg { background: rgba(0,0,0,.45); align-items: start; }
 .padbox { width: min(980px, 100%); margin-top: 2dvh; }
@@ -465,6 +468,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     <ul class="tasks" id="tasks"></ul>
     <form class="addrow" id="addForm">
       <input id="newTask" type="text" placeholder="✍ Napíš perom sem" aria-label="Nová úloha" autocomplete="off">
+      <button type="button" class="micbtn" id="micBtn" aria-label="Zadať hlasom" hidden>🎤</button>
       <button type="submit">Pridať</button>
     </form>
     <div class="foot">
@@ -520,9 +524,9 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 <div class="lock paddlg" id="padDlg" hidden>
   <form class="lockbox padbox" id="padForm">
     <h1 id="padTitle">Napíš perom</h1>
-    <p>Píš rovno na linajky. Každý riadok bude jedna úloha.</p>
+    <p id="padHelp">Píš rovno na linajky alebo ťukni na 🎤 a povedz to. Každý riadok bude jedna úloha.</p>
     <textarea id="padText" rows="6" aria-labelledby="padTitle" autocomplete="off"></textarea>
-    <div class="row"><button type="button" class="sec" id="padCancel">Zrušiť</button><button type="submit">Pridať</button></div>
+    <div class="row"><button type="button" class="sec" id="padCancel">Zrušiť</button><button type="button" class="sec padmic" id="padMic" hidden>🎤 Hovoriť</button><button type="submit">Pridať</button></div>
   </form>
 </div>
 
@@ -1348,14 +1352,43 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   }
   // Tapping an add field opens the big writing pad; each written line becomes one item in that field's list
   let padTarget = null;
-  function openPad(input) {
+  function openPad(input, voice) {
     padTarget = input;
     $('padTitle').textContent = input.getAttribute('aria-label') || 'Napíš perom';
     $('padText').value = input.value; input.value = ''; input.blur();
     $('padDlg').hidden = false;
-    setTimeout(() => $('padText').focus(), 50);
+    if (!voice) setTimeout(() => $('padText').focus(), 50);
   }
-  function closePad() { $('padDlg').hidden = true; padTarget = null; }
+  function closePad() { micStop(); $('padDlg').hidden = true; padTarget = null; }
+
+  // Voice input (Chrome speech recognition, Slovak): every finished sentence becomes a new line in the pad
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null;
+  function micStop() { if (rec) { const r = rec; rec = null; try { r.stop(); } catch (e) {} } $('padMic').classList.remove('on'); $('padMic').textContent = '🎤 Hovoriť'; }
+  function micStart() {
+    if (!SR || rec) return;
+    rec = new SR(); rec.lang = 'sk-SK'; rec.interimResults = true; rec.continuous = true;
+    const base = () => $('padText').value.replace(/\s+$/, '');
+    let committed = base();
+    rec.onresult = ev => {
+      let interim = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const t = ev.results[i][0].transcript.trim();
+        if (!t) continue;
+        if (ev.results[i].isFinal) committed += (committed ? '\n' : '') + t.charAt(0).toUpperCase() + t.slice(1);
+        else interim += t + ' ';
+      }
+      $('padText').value = committed + (interim ? (committed ? '\n' : '') + interim.trim() : '');
+    };
+    rec.onerror = ev => { $('padHelp').textContent = ev.error === 'not-allowed' ? 'Mikrofón nie je povolený. Povoľ ho pre Chrome v nastaveniach tabletu.' : 'Nerozumel som, skús to znova.'; };
+    rec.onend = () => { if (rec) micStop(); };
+    try { rec.start(); $('padMic').classList.add('on'); $('padMic').textContent = '■ Hotovo'; } catch (e) { rec = null; }
+  }
+  if (SR) {
+    $('padMic').hidden = false; $('micBtn').hidden = false;
+    $('padMic').addEventListener('click', () => rec ? micStop() : micStart());
+    $('micBtn').addEventListener('click', () => { openPad($('newTask'), true); micStart(); });
+  }
   document.addEventListener('focusin', ev => {
     const el = ev.target;
     if (el.matches && el.matches('.todo .addrow input[type=text], .board .addrow input[type=text], .subbox .addrow input[type=text]') && $('padDlg').hidden) openPad(el);
@@ -1364,6 +1397,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !$('padDlg').hidden) closePad(); });
   $('padForm').addEventListener('submit', ev => {
     ev.preventDefault();
+    micStop();
     const lines = $('padText').value.split('\n').map(x => x.trim()).filter(Boolean);
     const input = padTarget, form = input && input.form;
     closePad(); $('padText').value = '';
