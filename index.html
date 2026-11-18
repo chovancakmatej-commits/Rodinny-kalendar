@@ -330,6 +330,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 
 #newTask { font-size: 1.15rem; padding: 14px 14px; }
 .addrow .micbtn { font-size: 1.2rem; padding: 8px 12px; }
+#addForm .micbtn { flex: 1; font-size: 1.6rem; padding: 12px; }
 .lockbox button.padmic.on { background: #e2463a; color: #fff; border-color: #e2463a; animation: micpulse 1.2s ease-in-out infinite; }
 @keyframes micpulse { 50% { opacity: .65; } }
 /* Big lined writing pad: opens from any add-task field so the pen has room */
@@ -467,9 +468,9 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     <div class="todohead"><div class="ttabs" role="tablist"><button type="button" role="tab" id="tabOpen">To-do</button><button type="button" role="tab" id="tabDone">Splnené</button></div><button type="button" class="link" id="tdBtn">Pripojiť Todoist</button></div>
     <ul class="tasks" id="tasks"></ul>
     <form class="addrow" id="addForm">
-      <input id="newTask" type="text" placeholder="✍ Napíš perom sem" aria-label="Nová úloha" autocomplete="off">
+      <input id="newTask" type="hidden" aria-label="Nová úloha">
       <button type="button" class="micbtn" id="micBtn" aria-label="Zadať hlasom" hidden>🎤</button>
-      <button type="submit">Pridať</button>
+      <button type="button" class="micbtn" id="penBtn" aria-label="Napísať perom">✍️</button>
     </form>
     <div class="foot">
       <button class="ss" id="clearDone" type="button" hidden>Vymazať hotové</button>
@@ -1393,6 +1394,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const el = ev.target;
     if (el.matches && el.matches('.todo .addrow input[type=text], .board .addrow input[type=text], .subbox .addrow input[type=text]') && $('padDlg').hidden) openPad(el);
   });
+  $('penBtn').addEventListener('click', () => openPad($('newTask')));
   $('padCancel').addEventListener('click', closePad);
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !$('padDlg').hidden) closePad(); });
   $('padForm').addEventListener('submit', ev => {
