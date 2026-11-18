@@ -280,6 +280,9 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   transition: padding .25s ease, border-radius .25s ease; flex-wrap: wrap; justify-content: center; }
 .sspot::before { content: "♫"; color: #1db954; font-size: 1rem; }
+.sspot.idle:not(.big) { padding: 10px 14px; }
+.sspot.idle:not(.big) .spinfo { display: none; }
+.sspot.idle:not(.big)::before { font-size: 1.3rem; }
 .sspot img, .sspot .spdev, .sspot .spbtns, .sspot .sphint { display: none; }
 .sspot .spa { font-size: .78rem; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sspot.big .spdev { display: inline; }
@@ -1669,6 +1672,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     if (!sp.tok) { box.hidden = true; return; }
     box.hidden = false;
     const it = sp.state && sp.state.item;
+    box.classList.toggle('idle', !it);
     $('spArt').src = it && it.album && it.album.images && it.album.images.length ? it.album.images[it.album.images.length > 1 ? 1 : 0].url : '';
     $('spTitle').textContent = it ? it.name : (sp.msg || 'Spotify teraz nič nehrá');
     $('spArtist').innerHTML = it ? esc((it.artists || []).map(a => a.name).join(', ')) + (sp.state.device ? '<span class="spdev"> · ' + esc(sp.state.device.name) + '</span>' : '') : (sp.msg ? '' : 'Spusti hudbu v Spotify na mobile alebo tablete');
