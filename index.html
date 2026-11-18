@@ -280,7 +280,9 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   transition: padding .25s ease, border-radius .25s ease; flex-wrap: wrap; justify-content: center; }
 .sspot::before { content: "♫"; color: #1db954; font-size: 1rem; }
-.sspot img, .sspot .spa, .sspot .spbtns, .sspot .sphint { display: none; }
+.sspot img, .sspot .spdev, .sspot .spbtns, .sspot .sphint { display: none; }
+.sspot .spa { font-size: .78rem; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sspot.big .spdev { display: inline; }
 .spinfo { min-width: 0; max-width: 360px; text-align: left; }
 .spt { font-weight: 600; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sspot.big { padding: 12px 18px; border-radius: 22px; gap: 12px; }
@@ -1607,7 +1609,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const it = sp.state && sp.state.item;
     $('spArt').src = it && it.album && it.album.images && it.album.images.length ? it.album.images[it.album.images.length > 1 ? 1 : 0].url : '';
     $('spTitle').textContent = it ? it.name : (sp.msg || 'Spotify teraz nič nehrá');
-    $('spArtist').textContent = it ? (it.artists || []).map(a => a.name).join(', ') + (sp.state.device ? ' · ' + sp.state.device.name : '') : (sp.msg ? '' : 'Spusti hudbu v Spotify na mobile alebo tablete');
+    $('spArtist').innerHTML = it ? esc((it.artists || []).map(a => a.name).join(', ')) + (sp.state.device ? '<span class="spdev"> · ' + esc(sp.state.device.name) + '</span>' : '') : (sp.msg ? '' : 'Spusti hudbu v Spotify na mobile alebo tablete');
     $('spPlay').textContent = sp.state && sp.state.is_playing ? '⏸' : '▶';
   }
   async function spPoll() {
