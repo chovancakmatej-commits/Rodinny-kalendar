@@ -274,6 +274,18 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .ssnow { text-align: left; }
 .ssnow .lbl, .sstasks .lbl { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .75; margin-bottom: 4px; }
 #ssNext { font-size: 1.35rem; font-weight: 600; }
+/* Spotify under the clock: cover, song, controls */
+.sspot { display: flex; align-items: center; gap: 16px; margin-top: 14px; text-align: left; max-width: 100%; cursor: default; }
+.sspot img { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; box-shadow: 0 4px 18px rgba(0,0,0,.35); flex: none; }
+.sspot img:not([src]), .sspot img[src=""] { visibility: hidden; }
+.spinfo { min-width: 0; max-width: 340px; }
+.spt { font-weight: 700; font-size: 1.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spa { font-size: .92rem; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spbtns { display: flex; gap: 8px; flex: none; }
+.spbtns button { width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(255,255,255,.45); background: rgba(255,255,255,.08); color: #fff;
+  font-size: 1.2rem; cursor: pointer; display: grid; place-items: center; text-shadow: none; }
+.spbtns button.main { width: 56px; height: 56px; background: #fff; color: #111; border-color: #fff; font-size: 1.3rem; }
+.spbtns button:focus-visible { outline: 3px solid #1db954; outline-offset: 2px; }
 /* Right: frosted frame with today's programme, one column per calendar, tasks underneath */
 .ssframe { position: absolute; top: calc(44px + env(safe-area-inset-top, 0px)); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); right: max(24px, env(safe-area-inset-right, 0px));
   width: min(440px, 38vw); box-sizing: border-box; padding: 18px 18px 16px; border-radius: 22px; color: #fff;
@@ -449,6 +461,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       <button class="ss" id="ssBtn" type="button">Slideshow</button>
       <button class="ss" id="phBtn" type="button">Fotky</button>
       <button class="ss" id="slBtn" type="button">☾ Spánok</button>
+      <button class="ss" id="spBtn" type="button">♫ Spotify</button>
       <span class="note"><span id="status">Načítavam kalendár…</span> · slideshow po <span id="idleS">45</span> s nečinnosti</span>
     </div>
   </aside>
@@ -525,6 +538,17 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   </form>
 </div>
 
+<div class="lock" id="spDlg" hidden>
+  <form class="lockbox" id="spForm">
+    <h1>Spotify</h1>
+    <p id="spInfo">Vlož Client ID zo svojej aplikácie na developer.spotify.com. Uloží sa len v tomto zariadení.</p>
+    <input id="spClient" autocomplete="off" aria-label="Spotify Client ID" placeholder="Client ID">
+    <div class="row"><button type="submit">Prihlásiť do Spotify</button><button type="button" class="sec" id="spCancel">Zrušiť</button></div>
+    <button type="button" class="sec" id="spOff" hidden>Odpojiť Spotify</button>
+    <p class="err" id="spErr" aria-live="polite"></p>
+  </form>
+</div>
+
 <div class="sleep" id="sleep" hidden><span id="sleepHint">Ťukni pre zobudenie</span></div>
 
 <div class="undo" id="undo" hidden role="status"><span id="undoText"></span><button type="button" id="undoBtn">Späť</button></div>
@@ -533,6 +557,15 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   <div class="ssbg" id="ssBg" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
   <div class="ssmain">
     <div class="glass clockcard"><div class="bigclock tnum" id="ssClock"></div><div class="ssdate" id="ssDate"></div></div>
+    <div class="glass sspot" id="ssSpot" hidden>
+      <img id="spArt" alt="">
+      <div class="spinfo"><div class="spt" id="spTitle"></div><div class="spa" id="spArtist"></div></div>
+      <div class="spbtns">
+        <button type="button" id="spPrev" aria-label="Predchádzajúca skladba">⏮</button>
+        <button type="button" id="spPlay" class="main" aria-label="Prehrať alebo pozastaviť">▶</button>
+        <button type="button" id="spNext" aria-label="Ďalšia skladba">⏭</button>
+      </div>
+    </div>
     <div class="ssrow">
       <div class="glass sswx" id="ssWx" hidden></div>
       <div class="glass ssnow"><div class="lbl">V kalendári</div><div id="ssNext"></div></div>
@@ -1507,13 +1540,97 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   let sTimer = null, idleTimer = null;
   buildSlides(); loadPhotos();
   function next() { if (!slides.length) return; slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
-  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden || !$('padDlg').hidden || !$('nmDlg').hidden || !$('slDlg').hidden || !$('sleep').hidden) return; show.hidden = false; renderSsDay(); next(); sTimer = setInterval(next, 8000); }
+  function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden || !$('padDlg').hidden || !$('nmDlg').hidden || !$('slDlg').hidden || !$('sleep').hidden || !$('spDlg').hidden) return; show.hidden = false; renderSsDay(); spPoll(); next(); sTimer = setInterval(next, 8000); }
   function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
   function armIdle() { clearTimeout(idleTimer); if (show.hidden) idleTimer = setTimeout(startShow, IDLE_S * 1000); }
   $('idleS').textContent = IDLE_S;
   $('ssBtn').addEventListener('click', e => { e.stopPropagation(); clearTimeout(idleTimer); startShow(); });
   show.addEventListener('click', stopShow);
   ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { if (show.hidden) armIdle(); }, { passive: true }));
+
+  // ---------- Spotify remote (Web API, PKCE login in the browser; Client ID entered per device) ----------
+  const SP_SCOPES = 'user-read-playback-state user-modify-playback-state user-read-currently-playing';
+  const spRedirect = location.origin + location.pathname;
+  const sp = { client: store.get('kal-sp-client') || '', tok: null, state: null, msg: '' };
+  try { sp.tok = JSON.parse(store.get('kal-sp') || 'null'); } catch (e) {}
+  const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  async function spLogin() {
+    const ver = b64url(crypto.getRandomValues(new Uint8Array(48)));
+    const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ver)));
+    const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
+    store.set('kal-sp-ver', ver); store.set('kal-sp-state', state);
+    location.href = 'https://accounts.spotify.com/authorize?' + new URLSearchParams({ response_type: 'code', client_id: sp.client, scope: SP_SCOPES,
+      redirect_uri: spRedirect, code_challenge_method: 'S256', code_challenge: challenge, state });
+  }
+  async function spToken(params) {
+    const r = await fetch('https://accounts.spotify.com/api/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(Object.assign({ client_id: sp.client }, params)) });
+    if (!r.ok) throw new Error('token ' + r.status);
+    const j = await r.json();
+    sp.tok = { access: j.access_token, refresh: j.refresh_token || (sp.tok && sp.tok.refresh), exp: Date.now() + (j.expires_in - 60) * 1000 };
+    store.set('kal-sp', JSON.stringify(sp.tok));
+  }
+  // Coming back from the Spotify login page with ?code=…
+  (async () => {
+    const q = new URLSearchParams(location.search);
+    if (!q.get('code') && !q.get('error')) return;
+    history.replaceState(null, '', spRedirect);
+    if (q.get('state') !== store.get('kal-sp-state')) return;
+    if (q.get('error')) { sp.msg = 'Prihlásenie do Spotify zrušené'; return; }
+    try { await spToken({ grant_type: 'authorization_code', code: q.get('code'), redirect_uri: spRedirect, code_verifier: store.get('kal-sp-ver') }); spPoll(); }
+    catch (e) { sp.msg = 'Spotify sa nepodarilo pripojiť (' + e.message + ')'; }
+  })();
+  async function spApi(path, method = 'GET') {
+    if (!sp.tok) return null;
+    if (Date.now() > sp.tok.exp) await spToken({ grant_type: 'refresh_token', refresh_token: sp.tok.refresh });
+    const r = await fetch('https://api.spotify.com/v1/me/player' + path, { method, headers: { Authorization: 'Bearer ' + sp.tok.access } });
+    if (r.status === 401) { sp.tok.exp = 0; throw new Error('401'); }
+    if (r.status === 403) throw new Error('premium');
+    if (r.status === 404) throw new Error('nodevice');
+    return r.status === 204 || method !== 'GET' ? null : r.json().catch(() => null);
+  }
+  function spRender() {
+    const box = $('ssSpot');
+    if (!sp.tok) { box.hidden = true; return; }
+    box.hidden = false;
+    const it = sp.state && sp.state.item;
+    $('spArt').src = it && it.album && it.album.images && it.album.images.length ? it.album.images[it.album.images.length > 1 ? 1 : 0].url : '';
+    $('spTitle').textContent = it ? it.name : (sp.msg || 'Spotify teraz nič nehrá');
+    $('spArtist').textContent = it ? (it.artists || []).map(a => a.name).join(', ') + (sp.state.device ? ' · ' + sp.state.device.name : '') : (sp.msg ? '' : 'Spusti hudbu v Spotify na mobile alebo tablete');
+    $('spPlay').textContent = sp.state && sp.state.is_playing ? '⏸' : '▶';
+  }
+  async function spPoll() {
+    if (!sp.tok) return spRender();
+    try { sp.state = await spApi(''); sp.msg = ''; }
+    catch (e) { sp.state = null; sp.msg = e.message === 'premium' ? 'Ovládanie Spotify vyžaduje Premium' : e.message === '401' ? '' : 'Spotify nedostupné'; }
+    spRender();
+  }
+  async function spCmd(path, method) {
+    try { await spApi(path, method); }
+    catch (e) { sp.msg = e.message === 'nodevice' ? 'Najprv spusti Spotify na niektorom zariadení' : e.message === 'premium' ? 'Ovládanie Spotify vyžaduje Premium' : 'Príkaz sa nepodaril'; spRender(); }
+    setTimeout(spPoll, 600);
+  }
+  $('ssSpot').addEventListener('click', ev => ev.stopPropagation());
+  $('spPlay').addEventListener('click', () => spCmd(sp.state && sp.state.is_playing ? '/pause' : '/play', 'PUT'));
+  $('spNext').addEventListener('click', () => spCmd('/next', 'POST'));
+  $('spPrev').addEventListener('click', () => spCmd('/previous', 'POST'));
+  $('spBtn').addEventListener('click', () => {
+    $('spClient').value = sp.client; $('spErr').textContent = sp.msg || '';
+    $('spOff').hidden = !sp.tok;
+    $('spInfo').textContent = sp.tok ? 'Spotify je pripojené. Ovládanie nájdeš v šetriči pod hodinami.' :
+      'Vlož Client ID zo svojej aplikácie na developer.spotify.com (Redirect URI: ' + spRedirect + '). Uloží sa len v tomto zariadení.';
+    $('spDlg').hidden = false;
+  });
+  $('spCancel').addEventListener('click', () => { $('spDlg').hidden = true; });
+  $('spOff').addEventListener('click', () => { store.del('kal-sp'); sp.tok = null; sp.state = null; $('spDlg').hidden = true; spRender(); });
+  $('spForm').addEventListener('submit', ev => {
+    ev.preventDefault();
+    const id = $('spClient').value.trim();
+    if (!/^[0-9a-f]{32}$/i.test(id)) { $('spErr').textContent = 'Client ID má 32 znakov (čísla a písmená a–f).'; return; }
+    sp.client = id; store.set('kal-sp-client', id); spLogin();
+  });
+  spRender();
+  setInterval(() => { if (!$('show').hidden) spPoll(); }, 5000);
 
   // ---------- sleep: by button, or every night on a schedule ----------
   let slCfg = { on: false, from: '23:00', to: '06:30' };
