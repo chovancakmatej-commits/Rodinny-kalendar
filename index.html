@@ -274,18 +274,27 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .ssnow { text-align: left; }
 .ssnow .lbl, .sstasks .lbl { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .75; margin-bottom: 4px; }
 #ssNext { font-size: 1.35rem; font-weight: 600; }
-/* Spotify under the clock: cover, song, controls */
-.sspot { display: flex; align-items: center; gap: 12px; margin-top: 16px; text-align: left; max-width: 100%; cursor: default; }
-.sspot img { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; box-shadow: 0 4px 18px rgba(0,0,0,.35); flex: none; }
-.sspot img:not([src]), .sspot img[src=""] { visibility: hidden; }
-.spinfo { min-width: 0; max-width: 300px; }
-.spt { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.spa { font-size: .82rem; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.spbtns { display: flex; gap: 8px; flex: none; }
+/* Spotify: small frosted pill at the bottom; 1st tap grows it (cover + controls), 2nd tap opens the Spotify app */
+.sspot { position: absolute; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); left: calc((100% - min(440px, 38vw) - 24px) / 2); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; max-width: min(520px, 54vw); box-sizing: border-box; padding: 8px 18px; border-radius: 999px; color: #fff; cursor: pointer;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  transition: padding .25s ease, border-radius .25s ease; flex-wrap: wrap; justify-content: center; }
+.sspot::before { content: "♫"; color: #1db954; font-size: 1rem; }
+.sspot img, .sspot .spa, .sspot .spbtns, .sspot .sphint { display: none; }
+.spinfo { min-width: 0; max-width: 360px; text-align: left; }
+.spt { font-weight: 600; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sspot.big { padding: 12px 18px; border-radius: 22px; gap: 12px; }
+.sspot.big::before { display: none; }
+.sspot.big img { display: block; width: 56px; height: 56px; border-radius: 10px; object-fit: cover; box-shadow: 0 4px 18px rgba(0,0,0,.35); flex: none; }
+.sspot.big img:not([src]), .sspot.big img[src=""] { visibility: hidden; }
+.sspot.big .spa { display: block; font-size: .82rem; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sspot.big .spt { font-size: 1.05rem; font-weight: 700; }
+.sspot.big .spbtns { display: flex; gap: 8px; flex: none; }
+.sspot.big .sphint { display: block; flex-basis: 100%; text-align: center; font-size: .72rem; opacity: .6; }
 .spbtns button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,.45); background: rgba(255,255,255,.08); color: #fff;
   font-size: 1rem; cursor: pointer; display: grid; place-items: center; text-shadow: none; }
 .spbtns button.main { width: 46px; height: 46px; background: #fff; color: #111; border-color: #fff; font-size: 1.1rem; }
-.spbtns button:focus-visible { outline: 3px solid #1db954; outline-offset: 2px; }
+.spbtns button:focus-visible, .sspot:focus-visible { outline: 3px solid #1db954; outline-offset: 2px; }
 /* Right: frosted frame with today's programme, one column per calendar, tasks underneath */
 .ssframe { position: absolute; top: calc(44px + env(safe-area-inset-top, 0px)); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); right: max(24px, env(safe-area-inset-right, 0px));
   width: min(440px, 38vw); box-sizing: border-box; padding: 18px 18px 16px; border-radius: 22px; color: #fff;
@@ -365,7 +374,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .ssmonth .mg .td { background: #fff; color: #111; font-weight: 700; text-shadow: none; }
 .ssmonth .mg .has::after { content: ""; position: absolute; left: 50%; bottom: 2px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #ffc56b; }
 .ssmonth .mg .td.has::after { background: #c58410; }
-@media (max-width: 700px) { .ssframe { display: none; } .ssmain { left: 50%; width: 92vw; } }
+@media (max-width: 700px) { .ssframe { display: none; } .ssmain { left: 50%; width: 92vw; } .sspot { left: 50%; max-width: 92vw; } }
 /* Phone in landscape: smaller frame and type so the day still fits next to the clock */
 @media (max-height: 500px) and (min-width: 701px) {
   .ssframe { top: 10px; bottom: 10px; right: max(10px, env(safe-area-inset-right, 0px)); width: 46vw; padding: 10px 12px; gap: 6px; border-radius: 16px; }
@@ -561,15 +570,16 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       <div class="glass sswx" id="ssWx" hidden></div>
       <div class="glass ssnow"><div class="lbl">V kalendári</div><div id="ssNext"></div></div>
     </div>
-    <div class="glass sspot" id="ssSpot" hidden>
-      <img id="spArt" alt="">
-      <div class="spinfo"><div class="spt" id="spTitle"></div><div class="spa" id="spArtist"></div></div>
-      <div class="spbtns">
-        <button type="button" id="spPrev" aria-label="Predchádzajúca skladba">⏮</button>
-        <button type="button" id="spPlay" class="main" aria-label="Prehrať alebo pozastaviť">▶</button>
-        <button type="button" id="spNext" aria-label="Ďalšia skladba">⏭</button>
-      </div>
+  </div>
+  <div class="sspot" id="ssSpot" role="button" tabindex="0" aria-label="Spotify" hidden>
+    <img id="spArt" alt="">
+    <div class="spinfo"><div class="spt" id="spTitle"></div><div class="spa" id="spArtist"></div></div>
+    <div class="spbtns">
+      <button type="button" id="spPrev" aria-label="Predchádzajúca skladba">⏮</button>
+      <button type="button" id="spPlay" class="main" aria-label="Prehrať alebo pozastaviť">▶</button>
+      <button type="button" id="spNext" aria-label="Ďalšia skladba">⏭</button>
     </div>
+    <div class="sphint">ťukni znova pre otvorenie Spotify</div>
   </div>
   <div class="ssframe" id="ssFrame">
     <div class="sfh" id="ssDayHead">Dnes</div>
@@ -1611,7 +1621,21 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     catch (e) { sp.msg = e.message === 'nodevice' ? 'Najprv spusti Spotify na niektorom zariadení' : e.message === 'premium' ? 'Ovládanie Spotify vyžaduje Premium' : 'Príkaz sa nepodaril'; spRender(); }
     setTimeout(spPoll, 600);
   }
-  $('ssSpot').addEventListener('click', ev => ev.stopPropagation());
+  // Tap 1: grow; tap 2: open the Spotify app; untouched for a few seconds: shrink back
+  let spTimer = null;
+  const spShrinkLater = () => { clearTimeout(spTimer); spTimer = setTimeout(() => $('ssSpot').classList.remove('big'), 6000); };
+  function spOpenApp() {
+    const it = sp.state && sp.state.item, web = (it && it.external_urls && it.external_urls.spotify) || 'https://open.spotify.com/';
+    const path = web.replace(/^https:\/\//, '');
+    location.href = 'intent://' + path + '#Intent;scheme=https;package=com.spotify.music;S.browser_fallback_url=' + encodeURIComponent(web) + ';end';
+  }
+  $('ssSpot').addEventListener('click', ev => {
+    ev.stopPropagation();
+    if (ev.target.closest('.spbtns')) { spShrinkLater(); return; }
+    if ($('ssSpot').classList.contains('big')) { $('ssSpot').classList.remove('big'); spOpenApp(); return; }
+    $('ssSpot').classList.add('big'); spShrinkLater();
+  });
+  $('ssSpot').addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target === $('ssSpot')) $('ssSpot').click(); });
   $('spPlay').addEventListener('click', () => spCmd(sp.state && sp.state.is_playing ? '/pause' : '/play', 'PUT'));
   $('spNext').addEventListener('click', () => spCmd('/next', 'POST'));
   $('spPrev').addEventListener('click', () => spCmd('/previous', 'POST'));
