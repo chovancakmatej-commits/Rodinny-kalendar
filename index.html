@@ -309,15 +309,38 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .clockcard { padding: 0; }
 .show .bigclock { font-family: var(--display); font-weight: 700; font-size: clamp(4rem, min(32vh, 21vw), 15rem); line-height: .9; letter-spacing: -.04em; }
 .ssdate { font-size: clamp(1.2rem, 3.6vh, 2rem); font-weight: 600; text-transform: capitalize; opacity: .92; margin-top: 4px; }
-.ssrow { display: flex; justify-content: center; align-items: center; gap: 18px 48px; flex-wrap: wrap; margin-top: 18px; }
+.ssrow { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 22px; margin-top: 18px; }
 .ssrow > .glass { min-width: 0; max-width: 100%; }
-.sswx { display: flex; align-items: center; gap: 14px; text-align: left; }
-.sswx .ic { font-size: 3rem; line-height: 1; }
-.sswx .tp { font-family: var(--display); font-weight: 700; font-size: 2.6rem; line-height: 1; }
-.sswx .sm { font-size: .95rem; opacity: .85; }
-.ssnow { text-align: left; }
+.wi { width: 1em; height: 1em; display: inline-block; vertical-align: middle; flex: none; }
+.ic .wi, .i .wi { display: block; margin: 0 auto; }
+.pp .wi, .sm .wi { width: .95em; height: .95em; vertical-align: -.12em; margin-right: 2px; opacity: .8; }
+/* Screensaver weather: one calm row (now | today | +1 | +2), line icons */
+.sswx { display: flex; align-items: center; gap: 0; text-align: left; white-space: nowrap; }
+.sswx .now { display: flex; align-items: center; gap: 10px; padding-right: 16px; }
+.sswx .now .ic { font-size: 2.3rem; line-height: 1; }
+.sswx .tp { font-family: var(--display); font-weight: 700; font-size: 2.2rem; line-height: 1; letter-spacing: -.02em; }
+.sswx .sm { font-size: .9rem; opacity: .78; margin-top: 3px; }
+.sswx .fd { display: flex; align-items: center; gap: 7px; padding: 2px 13px; border-left: 1px solid rgba(255,255,255,.22); }
+.sswx .fd .n { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .7; }
+.sswx .fd .ic { font-size: 1.5rem; opacity: .95; }
+.sswx .fd .mm { font-size: 1.02rem; font-weight: 700; }
+.sswx .fd .mm span { opacity: .55; font-weight: 500; }
+.sswx .fd .rn { font-size: .72rem; opacity: .75; }
+.sswx .rn .wi { width: .9em; height: .9em; vertical-align: -.1em; margin-right: 1px; }
+/* Next event: its own frosted card with the calendar's colour */
+.ssnow { --c: #6f9ae0; position: relative; display: flex; align-items: center; gap: 20px; text-align: left; min-width: min(560px, 100%); padding: 16px 22px 16px 26px; border-radius: 20px;
+  background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.20); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 10px 40px rgba(0,0,0,.25); text-shadow: none; overflow: hidden; }
+.ssnow::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--c); }
+.ssnow.none { min-width: 0; opacity: .8; }
+.ssnow.none::before { display: none; }
+.ssnow .when { flex: none; text-align: center; padding-right: 20px; border-right: 1px solid rgba(255,255,255,.18); }
+.ssnow .when b { display: block; font-family: var(--display); font-size: 2rem; line-height: 1; letter-spacing: -.02em; }
+.ssnow .when small { display: block; font-size: .78rem; opacity: .75; margin-top: 4px; }
 .ssnow .lbl, .sstasks .lbl { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .75; margin-bottom: 4px; }
-#ssNext { font-size: 1.35rem; font-weight: 600; }
+.ssnow .lbl { color: var(--c); opacity: 1; filter: brightness(1.25); }
+.ssnow .ttl { font-size: 1.45rem; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ssnow .meta { font-size: .9rem; opacity: .78; margin-top: 3px; }
+.ssnow .in { flex: none; margin-left: auto; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--c) 30%, transparent); border: 1px solid color-mix(in srgb, var(--c) 60%, transparent); font-weight: 700; font-size: .95rem; white-space: nowrap; }
 /* Spotify: small frosted pill at the bottom; 1st tap grows it (cover + controls), 2nd tap opens the Spotify app */
 .sspot { position: absolute; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); left: calc((100% - min(440px, 38vw) - 24px) / 2); transform: translateX(-50%);
   display: flex; align-items: center; gap: 10px; max-width: min(520px, 54vw); box-sizing: border-box; padding: 8px 18px; border-radius: 999px; color: #fff; cursor: pointer;
@@ -439,7 +462,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .ssmonth .mg .td { background: #fff; color: #111; font-weight: 700; text-shadow: none; }
 .ssmonth .mg .has::after { content: ""; position: absolute; left: 50%; bottom: 2px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #ffc56b; }
 .ssmonth .mg .td.has::after { background: #c58410; }
-@media (max-width: 700px) { .ssframe { display: none; } .ssmain { left: 50%; width: 92vw; } .sspot { left: 50%; max-width: 92vw; } }
+@media (max-width: 700px) { .sswx { flex-wrap: wrap; justify-content: center; row-gap: 8px; } .ssframe { display: none; } .ssmain { left: 50%; width: 92vw; } .sspot { left: 50%; max-width: 92vw; } }
 /* Phone in landscape: smaller frame and type so the day still fits next to the clock */
 @media (max-height: 500px) and (min-width: 701px) {
   .ssframe { top: 10px; bottom: 10px; right: max(10px, env(safe-area-inset-right, 0px)); width: 46vw; padding: 10px 12px; gap: 6px; border-radius: 16px; }
@@ -447,8 +470,9 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   .show .bigclock { font-size: min(30vh, 15vw); }
   .ssdate { font-size: 1rem; }
   .ssrow { margin-top: 8px; gap: 8px 20px; }
-  .sswx .ic { font-size: 2rem; } .sswx .tp { font-size: 1.6rem; } .sswx .sm { font-size: .75rem; }
-  #ssNext { font-size: .95rem; }
+  .sswx .now .ic { font-size: 1.8rem; } .sswx .tp { font-size: 1.5rem; } .sswx .sm { font-size: .72rem; }
+  .sswx .fd { padding: 2px 10px; gap: 5px; } .sswx .fd .ic { font-size: 1.2rem; } .sswx .fd .mm { font-size: .85rem; } .sswx .fd .rn { display: none; }
+  .ssnow { padding: 8px 14px 8px 18px; gap: 12px; min-width: 0; } .ssnow .when b { font-size: 1.3rem; } .ssnow .ttl { font-size: 1rem; } .ssnow .meta { font-size: .75rem; } .ssnow .in { font-size: .75rem; }
   .sfh { font-size: .9rem; }
   .sfev { font-size: .78rem; padding: 2px 6px; } .sfev .tm { font-size: .68rem; }
   .sflist { gap: 3px; } .sflist .sfev { grid-template-columns: 74px minmax(0, 1fr); } .sflegend { font-size: .62rem; }
@@ -640,7 +664,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     <div class="glass clockcard"><div class="bigclock tnum" id="ssClock"></div><div class="ssdate" id="ssDate"></div></div>
     <div class="ssrow">
       <div class="glass sswx" id="ssWx" hidden></div>
-      <div class="glass ssnow"><div class="lbl">V kalendári</div><div id="ssNext"></div></div>
+      <div class="glass ssnow" id="ssNext"></div>
     </div>
   </div>
   <div class="sspot" id="ssSpot" role="button" tabindex="0" aria-label="Spotify" hidden>
@@ -671,6 +695,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 
 <script>
 (function () {
+  const SSC = { work: '#6f9ae0', me: '#3fbca6', wife: '#d277ac', fam: '#e3a83a' };   // bright variants that read on the dark screensaver
   const C = { work: 'var(--p-work)', me: 'var(--p-me)', wife: 'var(--p-wife)', fam: 'var(--p-fam)' };
   // Calendar names: defaults, renamed per device in the "Názvy kalendárov" dialog (tap the legend)
   const WHO_DEF = { work: 'Mato práca', me: 'Mato', wife: 'Janka', fam: 'Spoločné' };
@@ -1022,7 +1047,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const n = new Date(), evs = byDay[key(today)] || [];
     $('ssDayHead').textContent = 'Dnes · ' + today.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
     const nextUp = evs.find(e => !e.allDay && e.s > n);
-    const SC = { work: '#6f9ae0', me: '#3fbca6', wife: '#d277ac', fam: '#e3a83a' };   // bright variants that read on the dark screen
+    const SC = SSC;
     const list = evs.slice().sort((x, y) => (y.allDay - x.allDay) || (x.s - y.s));
     // Finished events are left out; all-day ones stay
     for (let i = list.length - 1; i >= 0; i--) if (!list[i].allDay && list[i].e <= n) list.splice(i, 1);
@@ -1121,6 +1146,29 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const h = Math.floor(min / 60), m = min % 60;
     return h + ' h' + (m ? ' ' + m + ' min' : '');
   }
+  // Screensaver card: the event running now, otherwise the next one (today first, then the coming week)
+  function renderSsNext(n) {
+    const box = $('ssNext'), todays = byDay[key(today)] || [];
+    const cur = todays.filter(e => !e.allDay && e.s <= n && e.e > n).sort((a, b) => b.s - a.s)[0];
+    const nx = cur || events.filter(e => !e.allDay && e.s > n && e.s - n < 7 * 86400000).sort((a, b) => a.s - b.s)[0];
+    if (!nx) {
+      box.className = 'glass ssnow none'; box.style.removeProperty('--c');
+      box.innerHTML = '<div><div class="lbl">V kalendári</div><div class="meta">Najbližší týždeň nič naplánované</div></div>';
+      return;
+    }
+    const s = new Date(nx.s), dd = Math.round((midnight(s) - today) / 86400000);
+    const day = dd === 0 ? 'dnes' : dd === 1 ? 'zajtra' : s.toLocaleDateString('sk-SK', { weekday: 'long' });
+    const min = Math.max(0, Math.round(((cur ? nx.e : nx.s) - n) / 60000));
+    const pill = cur ? 'ešte ' + fmtLeft(min) : dd === 0 ? fmtIn(min) : '';
+    const where = platform(nx) || (nx.where ? nx.where.split(/[;,]/)[0] : '');
+    box.className = 'glass ssnow';
+    box.style.setProperty('--c', SSC[nx.p]);
+    box.innerHTML = '<div class="when"><b class="tnum">' + hm(s) + '</b><small>' + esc(day) + '</small></div>' +
+      '<div style="min-width:0"><div class="lbl">' + (cur ? 'Práve prebieha' : 'Najbližšia udalosť') + '</div>' +
+      '<div class="ttl">' + (nx.imp ? '! ' : '') + esc(nx.t) + '</div>' +
+      '<div class="meta">' + esc([hm(s) + '–' + hm(new Date(nx.e)), isKid(nx) && kidWho(nx) ? kidWho(nx) : WHO[nx.p], where].filter(Boolean).join(' · ')) + '</div></div>' +
+      (pill ? '<div class="in tnum">' + esc(pill) + '</div>' : '');
+  }
   function renderNow(n) {
     const todays = byDay[key(today)] || [];
     // The most recently started timed event wins; an all-day "status" (vacation, cottage) is the fallback
@@ -1138,7 +1186,6 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       $('nextCount').innerHTML = cur.allDay ? '<small>dnes</small>celý deň' : '<small>ešte</small>' + fmtLeft(left);
       $('nextWhat').textContent = head;
       $('nextMeta').textContent = [head !== cur.t ? cur.t : '', where, cur.allDay ? '' : 'do ' + hm(cur.e), running.length > 1 ? '+' + (running.length - 1) + ' súčasne' : ''].filter(Boolean).join(' · ');
-      $('ssNext').textContent = head + (cur.allDay ? '' : ' · ešte ' + fmtLeft(left));
       return;
     }
     const nx = todays.find(e => !e.allDay && e.s > n);
@@ -1150,12 +1197,10 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       $('nextCount').innerHTML = '<small>začína</small>' + fmtIn(min);
       $('nextWhat').textContent = nx.t;
       $('nextMeta').textContent = [hm(nx.s), WHO[nx.p], platform(nx) || (nx.where ? nx.where.split(/[;,]/)[0] : '')].filter(Boolean).join(' · ');
-      $('ssNext').textContent = fmtIn(min).replace(/^o/, 'O') + ': ' + nx.t;
       return;
     }
     box.classList.add('idle');
     $('nextCount').textContent = 'Dnes už nič'; $('nextWhat').textContent = 'Pekný večer'; $('nextMeta').textContent = '';
-    $('ssNext').textContent = 'Dnes už nič v kalendári';
   }
 
   function tick() {
@@ -1164,7 +1209,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     $('clock').textContent = hm(n); $('ssClock').textContent = hm(n);
     $('date').textContent = n.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' });
     $('ssDate').textContent = $('date').textContent;
-    renderNow(n);
+    renderNow(n); renderSsNext(n);
     if (!$('show').hidden) renderSsDay();
     if (sameDay(selected, today)) renderDay();
   }
@@ -1583,10 +1628,27 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadTodoist(); });
 
   // ---------- weather (Open-Meteo, no key); place from the tablet's location, Bratislava if not allowed ----------
-  const WX = [[[0], 'Jasno', '☀️', '🌙'], [[1], 'Prevažne jasno', '🌤️', '🌙'], [[2], 'Polojasno', '⛅', '☁️'], [[3], 'Zamračené', '☁️'],
-    [[45, 48], 'Hmla', '🌫️'], [[51, 53, 55, 56, 57], 'Mrholenie', '🌦️'], [[61, 63, 65], 'Dážď', '🌧️'], [[66, 67], 'Mrznúci dážď', '🌧️'],
-    [[71, 73, 75, 77], 'Sneženie', '🌨️'], [[80, 81, 82], 'Prehánky', '🌦️'], [[85, 86], 'Snehové prehánky', '🌨️'], [[95, 96, 99], 'Búrka', '⛈️']];
-  const wxInfo = (code, day = 1) => { const r = WX.find(x => x[0].includes(code)) || [[], '', '🌡️']; return { txt: r[1], ic: !day && r[3] ? r[3] : r[2] }; };
+  // Line icons (Lucide, ISC licence), drawn in the text colour
+  const WI = {
+    sun: "<circle cx='12' cy='12' r='4'/><path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41'/>",
+    moon: "<path d='M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z'/>",
+    psun: "<path d='M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41M15.947 12.65a4 4 0 0 0-5.925-4.128M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z'/>",
+    pmoon: "<path d='M10.188 8.5A6 6 0 0 1 16 4a1 1 0 0 0 6 6 6 6 0 0 1-3 5.197M13 16a3 3 0 1 1 0 6H7a5 5 0 1 1 4.9-6Z'/>",
+    cloud: "<path d='M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'/>",
+    fog: "<path d='M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M16 17H7M17 21H9'/>",
+    drizzle: "<path d='M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M8 19v1M8 14v1M16 19v1M16 14v1M12 21v1M12 16v1'/>",
+    rain: "<path d='M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M16 14v6M8 14v6M12 16v6'/>",
+    snow: "<path d='M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M8 15h.01M8 19h.01M12 17h.01M12 21h.01M16 15h.01M16 19h.01'/>",
+    storm: "<path d='M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973M13 12l-3 5h4l-3 5'/>",
+    temp: "<path d='M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z'/>",
+    drop: "<path d='M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z'/>",
+    pin: "<path d='M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0'/><circle cx='12' cy='10' r='3'/>"
+  };
+  const wi = k => '<svg class="wi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + WI[k] + '</svg>';
+  const WX = [[[0], 'Jasno', 'sun', 'moon'], [[1], 'Prevažne jasno', 'psun', 'pmoon'], [[2], 'Polojasno', 'psun', 'pmoon'], [[3], 'Zamračené', 'cloud'],
+    [[45, 48], 'Hmla', 'fog'], [[51, 53, 55, 56, 57], 'Mrholenie', 'drizzle'], [[61, 63, 65], 'Dážď', 'rain'], [[66, 67], 'Mrznúci dážď', 'rain'],
+    [[71, 73, 75, 77], 'Sneženie', 'snow'], [[80, 81, 82], 'Prehánky', 'rain'], [[85, 86], 'Snehové prehánky', 'snow'], [[95, 96, 99], 'Búrka', 'storm']];
+  const wxInfo = (code, day = 1) => { const r = WX.find(x => x[0].includes(code)) || [[], '', 'temp']; return { txt: r[1], ic: wi(!day && r[3] ? r[3] : r[2]) }; };
   const deg = v => Math.round(v) + '°';
   let wxData = null;
   try { wxData = JSON.parse(store.get('kal-wx') || 'null'); } catch (e) {}
@@ -1635,7 +1697,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     return '<div class="wx3">' + [0, 1, 2].filter(i => d.daily.time[i] != null).map(i => {
       const x = wxInfo(d.daily.weather_code[i]), pp = d.daily.precipitation_probability_max[i];
       return '<div><b>' + wxDay(d.daily.time[i], i) + '</b><span class="i" aria-hidden="true">' + x.ic + '</span>' +
-        '<span class="pp tnum">💧' + (pp == null ? 0 : pp) + ' %</span>' +
+        '<span class="pp tnum">' + wi('drop') + (pp == null ? 0 : pp) + ' %</span>' +
         '<span class="mm tnum">' + deg(d.daily.temperature_2m_max[i]) + ' <span>' + deg(d.daily.temperature_2m_min[i]) + '</span></span></div>';
     }).join('') + '</div>';
   }
@@ -1644,18 +1706,24 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     if (!d || !d.current || Date.now() - d.at > 6 * 3600000) {
       // Keep the spot visible so it is clear the weather is coming; a tap retries
       $('wx').hidden = false; $('ssWx').hidden = true;
-      $('wx').innerHTML = '<span class="ic" aria-hidden="true">🌡️</span><span class="sm" style="display:block">Počasie sa načítava…<br>ťukni pre obnovenie</span>';
+      $('wx').innerHTML = '<span class="ic" aria-hidden="true">' + wi('temp') + '</span><span class="sm" style="display:block">Počasie sa načítava…<br>ťukni pre obnovenie</span>';
       return;
     }
     const place = d.place ? esc(d.place) + (d.approx ? ' (bez polohy)' : '') : '';
     const c = d.current, w = wxInfo(c.weather_code, c.is_day);
     $('wx').hidden = false;
     $('wx').innerHTML = '<span class="ic" aria-hidden="true">' + w.ic + '</span><span><span class="tp tnum">' + deg(c.temperature_2m) + '</span>' +
-      '<span class="sm">' + esc(w.txt) + (place ? '<br>📍 ' + place : '') + '</span></span>' + wx3(d);
+      '<span class="sm">' + esc(w.txt) + (place ? '<br>' + wi('pin') + place : '') + '</span></span>' + wx3(d);
     $('wx').querySelector('.sm').style.display = 'block';
     $('ssWx').hidden = false;
-    $('ssWx').innerHTML = '<span class="ic" aria-hidden="true">' + w.ic + '</span><div><div class="tp tnum">' + deg(c.temperature_2m) + '</div>' +
-      '<div class="sm">' + esc(w.txt) + (place ? ' · 📍 ' + place : '') + '</div>' + wx3(d) + '</div>';
+    $('ssWx').innerHTML = '<div class="now"><span class="ic">' + w.ic + '</span><div><div class="tp tnum">' + deg(c.temperature_2m) + '</div>' +
+      '<div class="sm">' + esc(w.txt) + (d.place ? ' · ' + esc(d.place) : '') + '</div></div></div>' +
+      [0, 1, 2].filter(i => d.daily.time[i] != null).map(i => {
+        const pp = d.daily.precipitation_probability_max[i] || 0;
+        return '<div class="fd"><span class="n">' + wxDay(d.daily.time[i], i) + '</span><span class="ic">' + wxInfo(d.daily.weather_code[i]).ic + '</span>' +
+          '<span class="mm tnum">' + deg(d.daily.temperature_2m_max[i]) + ' <span>' + deg(d.daily.temperature_2m_min[i]) + '</span></span>' +
+          (pp >= 50 ? '<span class="rn tnum">' + wi('drop') + pp + ' %</span>' : '') + '</div>';
+      }).join('');
   }
   function openWeather() {
     const d = wxData; if (!d) return;
