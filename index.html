@@ -166,12 +166,18 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .lockbox .ka button { font-size: .95rem; padding: 6px 16px; border-radius: 999px; border: 2px solid var(--c); background: none; color: var(--ink); }
 .lockbox .ka button.who { background: var(--c); color: var(--panel); }
 .lockbox .ka button.x { border-color: var(--line); padding: 6px 12px; }
+/* All assigned (or nothing coming): the kids strip shrinks to the right edge, today's row gets the room */
+.dayrows.kdone .evrow { flex: 1 1 auto; max-width: none; }
+.dayrows.kdone .kids { flex: 0 1 auto; margin-left: auto; max-width: 45%; }
+.dayrows.kdone .kc { width: 150px; padding: 4px 8px; }
+.dayrows.kdone .kc .kn { display: none; }
 .kidempty { color: var(--muted); font-size: .9rem; padding: 6px 0; }
 .kidlbl { font-size: .8rem; font-weight: 700; color: var(--kid); }
 .evbody .kidbox { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--kid) 14%, var(--panel)); }
 @media (max-width: 820px) {
   .dayrows { flex-direction: column; }
   .dayrows .evrow { max-width: none; }
+  .dayrows.kdone .kids { max-width: none; margin-left: 0; }
   .kids { padding-left: 0; border-left: 0; border-top: 2px solid color-mix(in srgb, var(--kid) 45%, var(--line)); padding-top: 8px; }
 }
 
@@ -911,7 +917,10 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   function renderKids() {
     const list = kidEvents(), n = new Date();
     const open = list.filter(e => !kidWhoP(e)).length;
-    $('kidsHead').textContent = '👧 Mila a Eliška · ' + KID_DAYS + ' dní dopredu' + (list.length ? ' · ' + (open ? 'nepriradené: ' + open : 'všetko priradené ✓') : '');
+    const done = !open && kidPick === null;
+    document.querySelector('.dayrows').classList.toggle('kdone', done);
+    $('kidsHead').textContent = done ? '👧 ' + (list.length ? 'Deti · priradené ✓' : 'Deti · 14 dní nič')
+      : '👧 Mila a Eliška · ' + KID_DAYS + ' dní dopredu' + (list.length ? ' · nepriradené: ' + open : '');
     $('kidrow').innerHTML = list.length ? list.map(e => {
       const d = e.s < n ? n : e.s;
       const dd = sameDay(d, today) ? 'dnes' : sameDay(d, new Date(today.getTime() + 86400000)) ? 'zajtra'
@@ -922,7 +931,8 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
         '<div class="kt">' + (e.imp ? '! ' : '') + esc(e.t) + '</div>' +
         '<div class="kn">' + esc(kidLine(e)) + ' · ' + esc(WHO[e.p]) + '</div>' +
         '<div class="ka">' + asgButtons(e) + '</div></div>';
-    }).join('') : '<div class="kidempty">Najbližšie 2 týždne nič s deťmi</div>';
+    }).join('') : '';
+    if (done) $('kidrow').scrollLeft = 0;
   }
   function kidAct(e, act) {
     const k = hlKey(e);
