@@ -58,9 +58,9 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .head { grid-area: head; display: flex; align-items: center; gap: 12px 24px; }
 .head > div:not(.clock) { min-width: 0; }
 .clock { font-family: var(--display); font-weight: 700; font-size: clamp(2rem, 7vh, 3.6rem); line-height: 1; letter-spacing: -0.02em; }
-.date { font-size: 1.15rem; font-weight: 600; text-transform: capitalize; }
+.date { font-size: 1.15rem; font-weight: 600; text-transform: capitalize; max-width: 9em; }
 .weather { color: var(--muted); font-size: .95rem; margin-top: 2px; }
-.next { margin-left: auto; background: var(--hl-bg); color: var(--hl-ink); border-radius: 12px; padding: 8px 16px; display: flex; align-items: center; gap: 14px; min-width: 0; max-width: 100%; flex-shrink: 1; }
+.next { margin-left: auto; background: var(--hl-bg); color: var(--hl-ink); border-radius: 14px; padding: 10px 20px; display: flex; align-items: center; gap: 18px; min-width: 0; max-width: 100%; flex: 1 1 0; align-self: stretch; }
 .next > div:last-child { min-width: 0; }
 .next .what, .next .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Countdown: the coloured fill shrinks from right to left as the current event runs out */
@@ -70,9 +70,9 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .next .fill::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 3px; background: var(--c, var(--p-fam)); }
 .next.idle .fill { display: none; }
 .next .count small { display: block; font-family: var(--body); font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; opacity: .8; }
-.next .count { font-family: var(--display); font-weight: 700; font-size: 1.5rem; white-space: nowrap; }
-.next .what { font-weight: 600; font-size: 1.05rem; }
-.next .meta { font-size: .85rem; opacity: .85; }
+.next .count { font-family: var(--display); font-weight: 700; font-size: 1.7rem; white-space: nowrap; padding-right: 18px; border-right: 1px solid color-mix(in srgb, currentColor 20%, transparent); }
+.next .what { font-weight: 700; font-size: 1.3rem; }
+.next .meta { font-size: .95rem; opacity: .85; margin-top: 2px; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .85rem; color: var(--muted); font: inherit; font-size: .85rem; background: none; border: 0; padding: 4px 6px; border-radius: 8px; cursor: pointer; }
 .legend:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
 .legend:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
@@ -444,16 +444,6 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 .wxbody .src { color: var(--muted); font-size: .75rem; }
 .wxbody > * { flex-shrink: 0; }
 .wxbody .wxh { font-size: 1rem; margin: 4px 0 0; }
-.wx3 { display: flex; gap: 14px; text-align: center; }
-.wx3 > div { display: flex; flex-direction: column; align-items: center; min-width: 46px; line-height: 1.15; }
-.wx3 b { font-size: .85rem; }
-.wx3 .i { font-size: 1.5rem; margin: 2px 0; }
-.wx3 .pp { font-size: .72rem; opacity: .8; }
-.wx3 .mm { font-size: .85rem; font-weight: 700; white-space: nowrap; }
-.wx3 .mm span { opacity: .65; font-weight: 400; }
-.wx .wx3 { margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--line); }
-.sswx .wx3 { margin-top: 10px; gap: 22px; }
-.sswx .wx3 b { font-size: 1rem; } .sswx .wx3 .i { font-size: 1.9rem; } .sswx .wx3 .pp { font-size: .85rem; } .sswx .wx3 .mm { font-size: 1.05rem; }
 .ssmonth .mt { font-family: var(--display); font-weight: 700; font-size: 1.2rem; text-transform: capitalize; margin-bottom: 8px; }
 .ssmonth .mg { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-variant-numeric: tabular-nums; }
 .ssmonth .mg span { padding: 5px 0 7px; position: relative; font-size: .95rem; border-radius: 50%; }
@@ -1692,15 +1682,6 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     const w = new Date(t + 'T12:00').toLocaleDateString('sk-SK', { weekday: long ? 'long' : 'short' });
     return w.charAt(0).toUpperCase() + w.slice(1);
   }
-  // Three-day strip (today + 2), like the Frameo weather widget
-  function wx3(d) {
-    return '<div class="wx3">' + [0, 1, 2].filter(i => d.daily.time[i] != null).map(i => {
-      const x = wxInfo(d.daily.weather_code[i]), pp = d.daily.precipitation_probability_max[i];
-      return '<div><b>' + wxDay(d.daily.time[i], i) + '</b><span class="i" aria-hidden="true">' + x.ic + '</span>' +
-        '<span class="pp tnum">' + wi('drop') + (pp == null ? 0 : pp) + ' %</span>' +
-        '<span class="mm tnum">' + deg(d.daily.temperature_2m_max[i]) + ' <span>' + deg(d.daily.temperature_2m_min[i]) + '</span></span></div>';
-    }).join('') + '</div>';
-  }
   function renderWeather() {
     const d = wxData;
     if (!d || !d.current || Date.now() - d.at > 6 * 3600000) {
@@ -1709,11 +1690,10 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       $('wx').innerHTML = '<span class="ic" aria-hidden="true">' + wi('temp') + '</span><span class="sm" style="display:block">Počasie sa načítava…<br>ťukni pre obnovenie</span>';
       return;
     }
-    const place = d.place ? esc(d.place) + (d.approx ? ' (bez polohy)' : '') : '';
     const c = d.current, w = wxInfo(c.weather_code, c.is_day);
     $('wx').hidden = false;
     $('wx').innerHTML = '<span class="ic" aria-hidden="true">' + w.ic + '</span><span><span class="tp tnum">' + deg(c.temperature_2m) + '</span>' +
-      '<span class="sm">' + esc(w.txt) + (place ? '<br>' + wi('pin') + place : '') + '</span></span>' + wx3(d);
+      '<span class="sm">' + esc(w.txt) + '</span></span>';
     $('wx').querySelector('.sm').style.display = 'block';
     $('ssWx').hidden = false;
     $('ssWx').innerHTML = '<div class="now"><span class="ic">' + w.ic + '</span><div><div class="tp tnum">' + deg(c.temperature_2m) + '</div>' +
