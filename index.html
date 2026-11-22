@@ -171,8 +171,10 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .lockbox .ka button.who { background: var(--c); color: var(--panel); }
 .lockbox .ka button.x { border-color: var(--line); padding: 6px 12px; }
 /* All assigned (or nothing coming): the kids strip shrinks to the right edge, today's row gets the room */
-.dayrows.kdone .evrow { flex: 1 1 auto; max-width: none; }
-.dayrows.kdone .kids { flex: 0 1 auto; margin-left: auto; max-width: 45%; }
+.dayrows.kdone .evrow { flex: 1 1 0; max-width: none; }
+/* Fixed width: one full card stays readable however many events today has; more cards scroll sideways */
+.dayrows.kdone .kids { flex: 0 0 182px; width: 182px; margin-left: auto; }
+.dayrows.kdone .kidshead { overflow: hidden; text-overflow: ellipsis; }
 .dayrows.kdone .kc { width: 150px; padding: 4px 8px; }
 .dayrows.kdone .kc .kn { display: none; }
 .kidempty { color: var(--muted); font-size: .9rem; padding: 6px 0; }
@@ -181,7 +183,7 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 @media (max-width: 820px) {
   .dayrows { flex-direction: column; }
   .dayrows .evrow { max-width: none; }
-  .dayrows.kdone .kids { max-width: none; margin-left: 0; }
+  .dayrows.kdone .kids { max-width: none; margin-left: 0; flex: 1 1 auto; width: auto; }
   .kids { padding-left: 0; border-left: 0; border-top: 2px solid color-mix(in srgb, var(--kid) 45%, var(--line)); padding-top: 8px; }
 }
 
