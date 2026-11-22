@@ -18,7 +18,7 @@ Nastavenie v **Settings › Secrets and variables › Actions**:
 
 Udalosť, ktorej názov začína `!`, sa zobrazí ako dôležitá.
 
-## Presné spúšťanie každých 15 minút (cron-job.org)
+## Presné spúšťanie každých 5 minút (cron-job.org)
 
 GitHub plánované behy (`schedule`) často oneskoruje, reálne bežia raz za 45–70 minút. Presnejšie ich spúšťa bezplatná služba cron-job.org:
 
@@ -26,7 +26,7 @@ GitHub plánované behy (`schedule`) často oneskoruje, reálne bežia raz za 45
    Repository access: *Only select repositories* › `Rodinny-kalendar`. Permissions › Repository › **Actions: Read and write**. Platnosť napr. 1 rok. Token skopíruj.
 2. **cron-job.org:** zaregistruj sa, *Create cronjob*:
    - URL: `https://api.github.com/repos/chovancakmatej-commits/Rodinny-kalendar/actions/workflows/kalendar.yml/dispatches`
-   - Execution schedule: *Every 15 minutes*
+   - Execution schedule: *Every 5 minutes* (tablet si dáta sťahuje každé 2 minúty)
    - Advanced › Request method: **POST**
    - Advanced › Headers: `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`
    - Advanced › Request body: `{"ref":"main"}`
