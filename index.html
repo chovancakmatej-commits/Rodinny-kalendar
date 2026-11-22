@@ -2,7 +2,7 @@
 <html lang="sk">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content">
 <meta name="theme-color" content="#11171d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -298,6 +298,8 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 
 /* Slideshow */
 .show { position: fixed; inset: 0; z-index: 50; background: #000; cursor: pointer; overflow: hidden; }
+/* While the screensaver is on, the strip above the page (system bar area on the tablet) is dark too */
+html.ssmode, html.ssmode body { background: #16202c; }
 .slide { position: absolute; inset: -4%; opacity: 0; transition: opacity 1.6s ease; background-size: cover; }
 .slide.on { opacity: 1; animation: kb 12s linear forwards; }
 @keyframes kb { from { transform: scale(1); } to { transform: scale(1.08) translate(-1%, -1%); } }
@@ -413,8 +415,10 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
 @keyframes micpulse { 50% { opacity: .65; } }
 /* Big lined writing pad: opens from any add-task field so the pen has room */
 .lock.paddlg { background: rgba(0,0,0,.45); align-items: start; }
-.padbox { width: min(980px, 100%); margin-top: 2dvh; }
-.padbox textarea { font: inherit; font-size: 1.8rem; line-height: 64px; height: min(56dvh, 448px); resize: none; box-sizing: border-box;
+.padbox { width: min(980px, 100%); margin-top: 0; }
+/* Buttons sit above the lines, so they stay visible when the on-screen keyboard covers the lower half */
+.padbox .row { order: 0; }
+.padbox textarea { font: inherit; font-size: 1.8rem; line-height: 64px; height: min(40dvh, 320px); resize: none; box-sizing: border-box;
   padding: 0 18px; border-radius: 12px; border: 1px solid var(--line); color: var(--ink); -webkit-user-select: text; user-select: text;
   background: var(--panel) repeating-linear-gradient(transparent 0 63px, color-mix(in srgb, var(--p-work) 35%, transparent) 63px 64px) local; }
 .padbox textarea:focus-visible { outline: 3px solid var(--p-work); outline-offset: 2px; }
@@ -613,8 +617,8 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   <form class="lockbox padbox" id="padForm">
     <h1 id="padTitle">Napíš perom</h1>
     <p id="padHelp">Píš rovno na linajky alebo ťukni na 🎤 a povedz to. Každý riadok bude jedna úloha.</p>
-    <textarea id="padText" rows="6" aria-labelledby="padTitle" autocomplete="off"></textarea>
     <div class="row"><button type="button" class="sec" id="padCancel">Zrušiť</button><button type="button" class="sec padmic" id="padMic" hidden>🎤 Hovoriť</button><button type="submit">Pridať</button></div>
+    <textarea id="padText" rows="6" aria-labelledby="padTitle" autocomplete="off"></textarea>
   </form>
 </div>
 
@@ -646,8 +650,8 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     <h1>Spotify</h1>
     <p id="spInfo">Vlož Client ID zo svojej aplikácie na developer.spotify.com. Uloží sa len v tomto zariadení.</p>
     <input id="spClient" autocomplete="off" aria-label="Spotify Client ID" placeholder="Client ID">
-    <div class="row"><button type="submit">Prihlásiť do Spotify</button><button type="button" class="sec" id="spCancel">Zrušiť</button></div>
-    <button type="button" class="sec" id="spOff" hidden>Odpojiť Spotify</button>
+    <div class="row"><button type="submit" id="spSubmit">Prihlásiť do Spotify</button><button type="button" class="sec" id="spCancel">Zrušiť</button></div>
+    <button type="button" class="sec" id="spOff" hidden>Odpojiť všetky účty</button>
     <p class="err" id="spErr" aria-live="polite"></p>
   </form>
 </div>
@@ -1829,6 +1833,12 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   function next() { if (!slides.length) return; slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
   function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden || !$('padDlg').hidden || !$('nmDlg').hidden || !$('slDlg').hidden || !$('sleep').hidden || !$('spDlg').hidden) return; show.hidden = false; renderSsDay(); spPoll(); next(); sTimer = setInterval(next, 8000); }
   function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
+  // Dark root background and status bar colour while the screensaver is visible
+  new MutationObserver(() => {
+    const on = !show.hidden;
+    document.documentElement.classList.toggle('ssmode', on);
+    document.querySelector('meta[name="theme-color"]').content = on ? '#16202c' : '#11171d';
+  }).observe(show, { attributes: true, attributeFilter: ['hidden'] });
   function armIdle() { clearTimeout(idleTimer); if (show.hidden) idleTimer = setTimeout(startShow, IDLE_S * 1000); }
   $('idleS').textContent = IDLE_S;
   $('ssBtn').addEventListener('click', e => { e.stopPropagation(); clearTimeout(idleTimer); startShow(); });
@@ -1839,47 +1849,62 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   const SP_SCOPES = 'user-read-playback-state user-modify-playback-state user-read-currently-playing';
   // Always the same address, whatever path the app was opened from (index.html, other letter case), so it matches the Spotify dashboard exactly
   const spRedirect = /github\.io$/.test(location.hostname) ? 'https://chovancakmatej-commits.github.io/Rodinny-kalendar/' : location.origin + location.pathname.replace(/index\.html$/, '');
-  const sp = { client: store.get('kal-sp-client') || '', tok: null, state: null, msg: '' };
-  try { sp.tok = JSON.parse(store.get('kal-sp') || 'null'); } catch (e) {}
+  // Several Spotify accounts (e.g. Mato and Janka); the screensaver shows whichever one is playing
+  const sp = { client: store.get('kal-sp-client') || '', accts: [], cur: null, state: null, msg: '', devices: null };
+  try { sp.accts = JSON.parse(store.get('kal-sp-accts') || '[]') || []; } catch (e) {}
+  try { const old = JSON.parse(store.get('kal-sp') || 'null'); if (old && !sp.accts.length) sp.accts = [{ tok: old, name: '' }]; } catch (e) {}
+  store.del('kal-sp');
+  const spSave = () => store.set('kal-sp-accts', JSON.stringify(sp.accts));
   const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   async function spLogin() {
     const ver = b64url(crypto.getRandomValues(new Uint8Array(48)));
     const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ver)));
     const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
     store.set('kal-sp-ver', ver); store.set('kal-sp-state', state);
+    // show_dialog: Spotify shows the account with a "Not you?" link, so another person can sign in
     location.href = 'https://accounts.spotify.com/authorize?' + new URLSearchParams({ response_type: 'code', client_id: sp.client, scope: SP_SCOPES,
-      redirect_uri: spRedirect, code_challenge_method: 'S256', code_challenge: challenge, state });
+      redirect_uri: spRedirect, code_challenge_method: 'S256', code_challenge: challenge, state, show_dialog: 'true' });
   }
-  async function spToken(params) {
+  async function spToken(params, a) {
     const r = await fetch('https://accounts.spotify.com/api/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams(Object.assign({ client_id: sp.client }, params)) });
     if (!r.ok) throw new Error('token ' + r.status);
     const j = await r.json();
-    sp.tok = { access: j.access_token, refresh: j.refresh_token || (sp.tok && sp.tok.refresh), exp: Date.now() + (j.expires_in - 60) * 1000 };
-    store.set('kal-sp', JSON.stringify(sp.tok));
+    a.tok = { access: j.access_token, refresh: j.refresh_token || (a.tok && a.tok.refresh), exp: Date.now() + (j.expires_in - 60) * 1000 };
+    spSave();
   }
-  // Coming back from the Spotify login page with ?code=…
+  async function spFetch(a, url, method = 'GET') {
+    if (Date.now() > a.tok.exp) await spToken({ grant_type: 'refresh_token', refresh_token: a.tok.refresh }, a);
+    const r = await fetch('https://api.spotify.com/v1' + url, { method, headers: { Authorization: 'Bearer ' + a.tok.access } });
+    if (r.status === 401) { a.tok.exp = 0; throw new Error('401'); }
+    if (r.status === 403) throw new Error('premium');
+    if (r.status === 404) throw new Error('nodevice');
+    return r.status === 204 || method !== 'GET' ? null : r.json().catch(() => null);
+  }
+  // Coming back from the Spotify login page with ?code=… adds the account (or refreshes it if it is already there)
   (async () => {
     const q = new URLSearchParams(location.search);
     if (!q.get('code') && !q.get('error')) return;
     history.replaceState(null, '', spRedirect);
     if (q.get('state') !== store.get('kal-sp-state')) return;
     if (q.get('error')) { sp.msg = 'Prihlásenie do Spotify zrušené'; return; }
-    try { await spToken({ grant_type: 'authorization_code', code: q.get('code'), redirect_uri: spRedirect, code_verifier: store.get('kal-sp-ver') }); spPoll(); }
+    try {
+      const a = { tok: null, name: '', id: '' };
+      await spToken({ grant_type: 'authorization_code', code: q.get('code'), redirect_uri: spRedirect, code_verifier: store.get('kal-sp-ver') }, a);
+      const me = await spFetch(a, '/me').catch(() => null);
+      if (me) { a.name = me.display_name || me.id || ''; a.id = me.id || ''; }
+      const k = sp.accts.findIndex(x => a.id && x.id === a.id);
+      if (k >= 0) sp.accts[k] = a; else sp.accts.push(a);
+      spSave(); spPoll();
+    }
     catch (e) { sp.msg = 'Spotify sa nepodarilo pripojiť (' + e.message + ')'; }
   })();
-  async function spApi(path, method = 'GET') {
-    if (!sp.tok) return null;
-    if (Date.now() > sp.tok.exp) await spToken({ grant_type: 'refresh_token', refresh_token: sp.tok.refresh });
-    const r = await fetch('https://api.spotify.com/v1/me/player' + path, { method, headers: { Authorization: 'Bearer ' + sp.tok.access } });
-    if (r.status === 401) { sp.tok.exp = 0; throw new Error('401'); }
-    if (r.status === 403) throw new Error('premium');
-    if (r.status === 404) throw new Error('nodevice');
-    return r.status === 204 || method !== 'GET' ? null : r.json().catch(() => null);
-  }
+  // Fill in names of accounts connected before names were stored
+  sp.accts.forEach(a => { if (!a.name) spFetch(a, '/me').then(me => { if (me) { a.name = me.display_name || me.id || ''; a.id = me.id || ''; spSave(); } }).catch(() => {}); });
+  const spApi = (path, method = 'GET') => sp.cur ? spFetch(sp.cur, '/me/player' + path, method) : Promise.resolve(null);
   function spRender() {
     const box = $('ssSpot');
-    if (!sp.tok) { box.hidden = true; return; }
+    if (!sp.accts.length) { box.hidden = true; return; }
     box.hidden = false;
     const it = sp.state && sp.state.item;
     box.classList.toggle('idle', !it);
@@ -1887,26 +1912,39 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     $('spArt').src = imgs.length ? imgs[imgs.length > 1 ? 1 : 0].url : '';
     const dev = sp.state && sp.state.device;
     const by = it ? (it.artists ? it.artists.map(a => a.name).join(', ') : it.show ? it.show.name : '') : '';
+    const who = sp.accts.length > 1 && sp.cur && sp.cur.name ? sp.cur.name.split(' ')[0] : '';
     $('spTitle').textContent = it ? it.name : sp.msg || (dev && sp.state.is_playing ? 'Hrá na ' + dev.name : 'Spotify teraz nič nehrá');
-    $('spArtist').innerHTML = it ? esc(by) + (dev ? '<span class="spdev"> · ' + esc(dev.name) + '</span>' : '')
+    $('spArtist').innerHTML = it ? esc(by) + '<span class="spdev">' + esc([who, dev && dev.name].filter(Boolean).map(x => ' · ' + x).join('')) + '</span>'
       : sp.msg ? '' : sp.devices && sp.devices.length ? 'Spotify vidí: ' + esc(sp.devices.join(', ')) : sp.devices ? 'Spotify nevidí žiadne aktívne zariadenie' : 'Spusti hudbu v Spotify na mobile alebo tablete';
     $('spPlay').textContent = sp.state && sp.state.is_playing ? '⏸' : '▶';
   }
-  async function spPoll() {
-    if (!sp.tok) return spRender();
-    try {
-      const Q = '?additional_types=track,episode';
-      let st = await spApi(Q);
-      // Some speakers only show up in currently-playing; podcasts need additional_types to have an item
-      if (!st || !st.item) {
-        const cp = await spApi('/currently-playing' + Q).catch(() => null);
-        if (cp && cp.item) st = Object.assign({}, cp, { device: st && st.device });
-      }
-      sp.devices = null;
-      if (!st || !st.item) { const dv = await spApi('/devices').catch(() => null); sp.devices = dv && dv.devices ? dv.devices.map(d => d.name) : null; }
-      sp.state = st; sp.msg = '';
+  async function spStateOf(a) {
+    const Q = '?additional_types=track,episode';
+    let st = await spFetch(a, '/me/player' + Q);
+    // Some speakers only show up in currently-playing; podcasts need additional_types to have an item
+    if (!st || !st.item) {
+      const cp = await spFetch(a, '/me/player/currently-playing' + Q).catch(() => null);
+      if (cp && cp.item) st = Object.assign({}, cp, { device: st && st.device });
     }
-    catch (e) { sp.state = null; sp.msg = e.message === 'premium' ? 'Ovládanie Spotify vyžaduje Premium' : e.message === '401' ? '' : 'Spotify nedostupné'; }
+    return st;
+  }
+  async function spPoll() {
+    if (!sp.accts.length) return spRender();
+    const res = await Promise.all(sp.accts.map(a => spStateOf(a).then(st => ({ a, st }), e => ({ a, err: e.message }))));
+    // Playing wins; then the last account shown if it still has a track; then any account with a track
+    const pick = res.find(r => r.st && r.st.is_playing && r.st.item) || res.find(r => r.a === sp.cur && r.st && r.st.item) || res.find(r => r.st && r.st.item);
+    sp.devices = null; sp.msg = '';
+    if (pick) { sp.cur = pick.a; sp.state = pick.st; }
+    else {
+      sp.cur = sp.cur && sp.accts.includes(sp.cur) ? sp.cur : sp.accts[0]; sp.state = null;
+      const errs = res.filter(r => r.err && r.err !== '401');
+      if (errs.length === res.length) sp.msg = errs.some(r => r.err === 'premium') ? 'Ovládanie Spotify vyžaduje Premium' : 'Spotify nedostupné';
+      else {
+        const names = [];
+        for (const r of res) { if (r.err) continue; const dv = await spFetch(r.a, '/me/player/devices').catch(() => null); if (dv && dv.devices) names.push(...dv.devices.map(d => d.name)); }
+        sp.devices = names;
+      }
+    }
     spRender();
   }
   async function spCmd(path, method) {
@@ -1935,13 +1973,14 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   $('spPrev').addEventListener('click', () => spCmd('/previous', 'POST'));
   $('spBtn').addEventListener('click', () => {
     $('spClient').value = sp.client; $('spErr').textContent = sp.msg || '';
-    $('spOff').hidden = !sp.tok;
-    $('spInfo').textContent = sp.tok ? 'Spotify je pripojené. Ovládanie nájdeš v šetriči pod hodinami.' :
+    $('spOff').hidden = !sp.accts.length;
+    $('spInfo').textContent = sp.accts.length ? 'Pripojené účty: ' + sp.accts.map(a => a.name || 'účet bez mena').join(', ') + ' · Šetrič ukazuje ten, na ktorom práve niečo hrá. Ďalší účet pridáš tlačidlom nižšie; na prihlasovacej stránke Spotify ťukni na „Nie ste to vy?“ a prihlás sa druhým účtom.' :
       'Vlož Client ID zo svojej aplikácie na developer.spotify.com (Redirect URI: ' + spRedirect + '). Uloží sa len v tomto zariadení.';
+    $('spSubmit').textContent = sp.accts.length ? 'Pridať ďalší účet' : 'Prihlásiť do Spotify';
     $('spDlg').hidden = false;
   });
   $('spCancel').addEventListener('click', () => { $('spDlg').hidden = true; });
-  $('spOff').addEventListener('click', () => { store.del('kal-sp'); sp.tok = null; sp.state = null; $('spDlg').hidden = true; spRender(); });
+  $('spOff').addEventListener('click', () => { store.del('kal-sp-accts'); sp.accts = []; sp.cur = null; sp.state = null; $('spDlg').hidden = true; spRender(); });
   $('spForm').addEventListener('submit', ev => {
     ev.preventDefault();
     const id = $('spClient').value.trim();
