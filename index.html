@@ -406,6 +406,17 @@ html.ssmode, html.ssmode body { background: #16202c; }
 .sftasks li { padding: 2px 0; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; break-inside: avoid; }
 .sftasks li::before { content: "○ "; opacity: .7; }
 .sftasks li.more::before { content: ""; }
+.sftasks li.new { color: #ffe08a; font-weight: 700; }
+.sftasks li.new::before { content: "● "; opacity: 1; }
+.ssnew { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 8px; padding: 6px 13px 6px 10px; border-radius: 999px;
+  background: #ffd54a; color: #1b1f27; font-weight: 800; font-size: .9rem; box-shadow: 0 4px 18px rgba(255,213,74,.45); animation: ssnewpulse 2.4s ease-in-out infinite; }
+.ssnew::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 3px rgba(229,72,77,.3); }
+.ssnew[hidden] { display: none; }
+@keyframes ssnewpulse { 50% { transform: scale(1.06); box-shadow: 0 4px 26px rgba(255,213,74,.75); } }
+@media (prefers-reduced-motion: reduce) { .ssnew { animation: none; } }
+.tasks .t.st { flex: 1; }
+.tasks .meta.st { display: flex; gap: 8px; }
+.tasks .stamp { margin-left: auto; flex: none; font-size: .7rem; opacity: .85; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .show .cap { position: absolute; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top, 0px)); color: rgba(255,255,255,.55); font-size: .8rem; }
 
 #newTask { font-size: 1.15rem; padding: 14px 14px; }
@@ -681,6 +692,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
   </div>
   <div class="ssframe" id="ssFrame">
     <div class="sfh" id="ssDayHead">Dnes</div>
+    <div class="ssnew" id="ssNew" hidden>Nová úloha</div>
     <div class="sfcols" id="ssCols"></div>
     <div class="sftasks" id="ssTasks"></div>
   </div>
@@ -1282,7 +1294,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
 
   // ---------- to-do: Todoist when connected on this device, otherwise kept locally ----------
   const DONE_DAYS = 30;
-  const todo = { token: store.get('kal-todoist'), tasks: [], done: [], projects: {}, projectList: [], error: '', extra: [], projTok: {}, names: {} };
+  const todo = { token: store.get('kal-todoist'), tasks: [], done: [], projects: {}, projectList: [], error: '', extra: [], projTok: {}, names: {}, uids: {}, newIds: new Set() };
   // More Todoist accounts (e.g. Janka): their tasks are shown together with the main account's, each change goes through the owner's token
   try { todo.extra = JSON.parse(store.get('kal-todoist-extra') || '[]') || []; } catch (e) {}
   const tdTokens = () => todo.token ? [todo.token].concat(todo.extra.map(x => x.token)) : [];
@@ -1330,6 +1342,35 @@ html.ssmode, html.ssmode body { background: #16202c; }
     } while (cursor);
     return out;
   }
+  // New tasks: anything not seen when the screensaver was last dismissed gets a badge on the screensaver
+  let tdSeen = null;
+  try { const v = store.get('kal-td-seen'); if (v) tdSeen = new Set(JSON.parse(v)); } catch (e) {}
+  const saveSeen = () => store.set('kal-td-seen', JSON.stringify([...tdSeen]));
+  function checkNew() {
+    const open = todo.tasks.filter(t => !t.parent_id).map(t => String(t.id));
+    if (!tdSeen) { tdSeen = new Set(open); saveSeen(); }
+    todo.newIds = new Set(open.filter(id => !tdSeen.has(id)));
+  }
+  function markTasksSeen() {
+    if (!todo.token || !tdSeen) return;
+    tdSeen = new Set(todo.tasks.map(t => String(t.id)).concat(todo.done.map(t => String(t.id || t.task_id))));
+    saveSeen(); todo.newIds = new Set(); renderTasks();
+  }
+  // Who added a task (first letter of the name: M, J) and when
+  function taskStamp(raw) {
+    if (!raw || !todo.token) return '';
+    const uid = String(raw.added_by_uid || raw.user_id || '');
+    const tok = Object.keys(todo.uids).find(k => todo.uids[k] === uid);
+    const who = tok && todo.names[tok] ? todo.names[tok][0].toUpperCase() : '';
+    const at = raw.added_at ? new Date(raw.added_at) : null;
+    let when = '';
+    if (at && !isNaN(at)) {
+      const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+      const hm = at.getHours() + ':' + String(at.getMinutes()).padStart(2, '0');
+      when = at >= d0 ? 'dnes ' + hm : at >= d0 - 86400000 ? 'včera ' + hm : at.getDate() + '. ' + (at.getMonth() + 1) + '.' + (at.getFullYear() !== d0.getFullYear() ? ' ' + at.getFullYear() : '');
+    }
+    return [who, when].filter(Boolean).join(' · ');
+  }
   async function loadTodoist(moved) {
     if (!todo.token) return;
     try {
@@ -1337,7 +1378,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
       const until = new Date(Date.now() + 60000).toISOString();
       const toks = tdTokens(), many = toks.length > 1;
       const res = await Promise.all(toks.map((tok, i) => Promise.all([tdAll('tasks', tok), tdAll('projects', tok), tdDone(since, until, tok),
-        many && !todo.names[tok] ? td('user', null, tok).catch(() => null) : null]).then(r => ({ tok, r }), e => { if (i === 0) throw e; return { tok, err: e }; })));
+        !todo.names[tok] || !todo.uids[tok] ? td('user', null, tok).catch(() => null) : null]).then(r => ({ tok, r }), e => { if (i === 0) throw e; return { tok, err: e }; })));
       // Shared projects and their tasks come from every account with the same id; the first account wins
       const projects = [], tasks = [], done = [], seenP = new Set(), seenT = new Set(), seenD = new Set();
       todo.projTok = {};
@@ -1349,7 +1390,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
       for (const { tok, r, err } of res) {
         if (err) continue;
         const [ts, ps, ds, user] = r;
-        if (user) todo.names[tok] = (user.full_name || user.email || '').split(' ')[0];
+        if (user) { todo.names[tok] = (user.full_name || user.email || '').split(' ')[0]; todo.uids[tok] = String(user.id || ''); }
         for (const p of ps) if (!seenP.has(p.id)) {
           seenP.add(p.id); todo.projTok[p.id] = tok;
           projects.push(many && (p.inbox_project || p.is_inbox_project) && todo.names[tok] ? Object.assign({}, p, { name: p.name + ' · ' + todo.names[tok] }) : p);
@@ -1373,6 +1414,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
       todo.projects = Object.fromEntries(projects.map(p => [p.id, p.name]));
       todo.tasks = tasks.filter(t => !t.checked && !t.is_deleted);
       todo.done = done;
+      checkNew();
       const bad = res.filter(x => x.err).length;
       todo.error = bad ? 'Jeden z Todoist účtov sa nepodarilo načítať' : '';
     } catch (e) {
@@ -1446,8 +1488,9 @@ html.ssmode, html.ssmode body { background: #16202c; }
     const li = document.createElement('li'); const id = 'tk' + (uid++);
     if (t.done) li.className = 'done';
     const meta = [dueLabel(t), todo.token && showProject ? esc(t.project) : ''].filter(Boolean).join(' · ');
-    li.innerHTML = '<label for="' + id + '"><input type="checkbox" id="' + id + '"' + (t.done ? ' checked' : '') + '><span class="t' + (t.imp ? ' imp' : '') + '">' + esc(t.t) +
-      (meta ? '<span class="meta">' + meta + '</span>' : '') + '</span></label>';
+    const stamp = t.done ? '' : taskStamp(t.raw);
+    li.innerHTML = '<label for="' + id + '"><input type="checkbox" id="' + id + '"' + (t.done ? ' checked' : '') + '><span class="t' + (t.imp ? ' imp' : '') + (stamp ? ' st' : '') + '">' + esc(t.t) +
+      (meta || stamp ? '<span class="meta' + (stamp ? ' st' : '') + '"><span>' + meta + '</span>' + (stamp ? '<span class="stamp">' + esc(stamp) + '</span>' : '') + '</span>' : '') + '</span></label>';
     li.querySelector('input').addEventListener('change', ev => complete(t, ev.target.checked));
     if (t.done) {
       const x = document.createElement('button');
@@ -1542,7 +1585,12 @@ html.ssmode, html.ssmode body { background: #16202c; }
       done.forEach(t => $('tasks').appendChild(taskItem(t, true)));
     }
     $('clearDone').hidden = !!todo.token || !local.some(x => x.done);
-    $('ssTasks').innerHTML = '<div class="lbl">Úlohy</div><ul>' + (list.length ? list.slice(0, 6).map(t => '<li>' + esc(t.t) + '</li>').join('') +
+    // New ones first so they are visible on the screensaver
+    const nw = todo.newIds || new Set(), ssList = list.filter(t => nw.has(String(t.id))).concat(list.filter(t => !nw.has(String(t.id))));
+    const nNew = ssList.filter(t => nw.has(String(t.id))).length;
+    $('ssNew').hidden = !nNew;
+    $('ssNew').textContent = nNew === 1 ? 'Nová úloha' : nNew + (nNew < 5 ? ' nové úlohy' : ' nových úloh');
+    $('ssTasks').innerHTML = '<div class="lbl">Úlohy</div><ul>' + (list.length ? ssList.slice(0, 6).map(t => '<li' + (nw.has(String(t.id)) ? ' class="new"' : '') + '>' + esc(t.t) + '</li>').join('') +
       (list.length > 6 ? '<li class="more">+ ďalšie ' + (list.length - 6) + '</li>' : '') : '<li class="more">Všetko hotové</li>') + '</ul>';
     if (view === 'tasks') renderBoard();
   }
@@ -1610,7 +1658,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
     // Add through the account that owns the list (Janka's Inbox only exists in her account)
     const par = parentId && todo.tasks.find(x => x.id === parentId);
     const tok = (par && par._tok) || (projectId && todo.projTok[projectId]) || todo.token;
-    try { await td('tasks', { method: 'POST', body: JSON.stringify(body) }, tok); }
+    try { const r = await td('tasks', { method: 'POST', body: JSON.stringify(body) }, tok); if (r && r.id && tdSeen) { tdSeen.add(String(r.id)); saveSeen(); } }
     catch (err) { todo.error = 'Úlohu sa nepodarilo pridať do Todoist'; }
     loadTodoist();
   }
@@ -1879,7 +1927,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
   buildSlides(); loadPhotos();
   function next() { if (!slides.length) return; slides.forEach(s => s.classList.remove('on')); void slides[si].offsetWidth; slides[si].classList.add('on'); si = (si + 1) % slides.length; }
   function startShow() { if (!$('lock').hidden || !$('tdDlg').hidden || !$('phDlg').hidden || !$('evDlg').hidden || !$('wxDlg').hidden || !$('padDlg').hidden || !$('nmDlg').hidden || !$('slDlg').hidden || !$('sleep').hidden || !$('spDlg').hidden) return; show.hidden = false; renderSsDay(); spPoll(); next(); sTimer = setInterval(next, 8000); }
-  function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); }
+  function stopShow() { show.hidden = true; clearInterval(sTimer); armIdle(); markTasksSeen(); }
   // Dark root background and status bar colour while the screensaver is visible
   new MutationObserver(() => {
     const on = !show.hidden;
