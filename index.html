@@ -210,7 +210,10 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .foot .note { flex-basis: 100%; }
 
 .tasks .empty { color: var(--muted); padding: 10px 6px; }
-.todohead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.todohead { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.todohead .ttabs { min-width: 0; }
+.todohead .ttabs button { padding: 6px 10px; letter-spacing: .05em; }
+#tdBtn { flex: none; white-space: nowrap; }
 .ttabs { display: flex; gap: 4px; margin-bottom: 10px; }
 .ttabs button { font: inherit; font-family: var(--display); font-weight: 700; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
   color: var(--muted); background: none; border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
@@ -439,6 +442,10 @@ html.ssmode, html.ssmode body { background: #16202c; }
 .sleep span { color: #444; font-size: .9rem; transition: opacity 2s; }
 .sleep span.off { opacity: 0; }
 .lockbox input[type=time] { font-size: 1.1rem; padding: 8px 10px; }
+.slrow .nmrow { flex: 1 1 0; min-width: 0; }
+.slrow input[type=time] { width: 100%; min-width: 0; box-sizing: border-box; }
+.tasks label { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.tasks li.lp > label { background: color-mix(in srgb, var(--ink) 10%, transparent); }
 
 /* Weather */
 .wx { all: unset; display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 12px; cursor: pointer; flex: none; }
@@ -651,7 +658,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
     <p>Obrazovka sa vypne a aplikácia ostane spustená. Na zobudenie stačí rozsvietiť displej a ťuknúť.</p>
     <button type="button" id="slNow">☾ Uspať teraz</button>
     <label class="nmrow"><input type="checkbox" id="slOn" style="flex:none;width:24px;height:24px"> Plánovaný spánok každý deň</label>
-    <div class="row"><label class="nmrow">od <input type="time" id="slFrom" value="23:00"></label><label class="nmrow">do <input type="time" id="slTo" value="06:30"></label></div>
+    <div class="row slrow"><label class="nmrow">od <input type="time" id="slFrom" value="23:00"></label><label class="nmrow">do <input type="time" id="slTo" value="06:30"></label></div>
     <div class="row"><button type="submit">Uložiť</button><button type="button" class="sec" id="slCancel">Zrušiť</button></div>
   </form>
 </div>
@@ -1298,7 +1305,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
   // More Todoist accounts (e.g. Janka): their tasks are shown together with the main account's, each change goes through the owner's token
   try { todo.extra = JSON.parse(store.get('kal-todoist-extra') || '[]') || []; } catch (e) {}
   const tdTokens = () => todo.token ? [todo.token].concat(todo.extra.map(x => x.token)) : [];
-  function syncTdBtn() { $('tdBtn').textContent = todo.token ? 'Todoist ✓' : 'Pripojiť Todoist'; }
+  function syncTdBtn() { $('tdBtn').textContent = todo.token ? '✓ Todoist' : 'Pripojiť Todoist'; }
   $('tdBtn').addEventListener('click', () => {
     $('tdErr').textContent = ''; $('tdToken').value = ''; $('tdOff').hidden = !todo.token;
     const names = tdTokens().map(t => todo.names[t] || 'účet');
@@ -1359,8 +1366,8 @@ html.ssmode, html.ssmode body { background: #16202c; }
   // Who added a task (first letter of the name: M, J) and when
   function taskStamp(raw) {
     if (!raw || !todo.token) return '';
-    const uid = String(raw.added_by_uid || raw.user_id || '');
-    const tok = Object.keys(todo.uids).find(k => todo.uids[k] === uid);
+    const ids = [raw.added_by_uid, raw.user_id].filter(Boolean).map(String);
+    const tok = ids.map(u => Object.keys(todo.uids).find(k => todo.uids[k] === u)).find(Boolean);
     const who = tok && todo.names[tok] ? todo.names[tok][0].toUpperCase() : '';
     const at = raw.added_at ? new Date(raw.added_at) : null;
     let when = '';
@@ -1492,6 +1499,16 @@ html.ssmode, html.ssmode body { background: #16202c; }
     li.innerHTML = '<label for="' + id + '"><input type="checkbox" id="' + id + '"' + (t.done ? ' checked' : '') + '><span class="t' + (t.imp ? ' imp' : '') + (stamp ? ' st' : '') + '">' + esc(t.t) +
       (meta || stamp ? '<span class="meta' + (stamp ? ' st' : '') + '"><span>' + meta + '</span>' + (stamp ? '<span class="stamp">' + esc(stamp) + '</span>' : '') + '</span>' : '') + '</span></label>';
     li.querySelector('input').addEventListener('change', ev => complete(t, ev.target.checked));
+    if (!t.done) {
+      // Long press on an open task opens it for editing (fix a typo); a short tap still ticks it off
+      const lab = li.querySelector('label'); let lpT = null, fired = false, sx = 0, sy = 0;
+      const stop = () => { clearTimeout(lpT); lpT = null; li.classList.remove('lp'); };
+      lab.addEventListener('pointerdown', ev => { fired = false; sx = ev.clientX; sy = ev.clientY; li.classList.add('lp'); lpT = setTimeout(() => { fired = true; stop(); openEdit(t); }, 550); });
+      lab.addEventListener('pointermove', ev => { if (lpT && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 10) stop(); });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach(n => lab.addEventListener(n, stop));
+      lab.addEventListener('click', ev => { if (fired) { ev.preventDefault(); fired = false; } });
+      lab.addEventListener('contextmenu', ev => ev.preventDefault());
+    }
     if (t.done) {
       const x = document.createElement('button');
       x.type = 'button'; x.className = 'del'; x.textContent = '✕'; x.setAttribute('aria-label', 'Odstrániť ' + t.t);
@@ -1671,7 +1688,30 @@ html.ssmode, html.ssmode body { background: #16202c; }
     $('padDlg').hidden = false;
     if (!voice) setTimeout(() => $('padText').focus(), 50);
   }
-  function closePad() { micStop(); $('padDlg').hidden = true; padTarget = null; }
+  const padHelp0 = $('padHelp').textContent, padBtn = document.querySelector('#padForm button[type=submit]');
+  let padEdit = null;
+  function openEdit(t) {
+    padEdit = t; padTarget = null;
+    $('padTitle').textContent = 'Upraviť úlohu';
+    $('padHelp').textContent = 'Oprav text a ťukni na Uložiť.';
+    padBtn.textContent = 'Uložiť';
+    $('padText').value = t.t;
+    $('padDlg').hidden = false;
+    setTimeout(() => { const a = $('padText'); a.focus(); a.setSelectionRange(a.value.length, a.value.length); }, 50);
+  }
+  function closePad() {
+    micStop(); $('padDlg').hidden = true; padTarget = null;
+    if (padEdit) { padEdit = null; $('padHelp').textContent = padHelp0; padBtn.textContent = 'Pridať'; }
+  }
+  async function saveEdit(t, v) {
+    if (!v || v === t.t) return;
+    if (!todo.token) { t.src.t = v; saveLocal(); renderTasks(); return; }
+    const raw = todo.tasks.find(x => x.id === t.id); if (raw) raw.content = v;
+    renderTasks();
+    try { await td('tasks/' + t.id, { method: 'POST', body: JSON.stringify({ content: v }) }, t.raw && t.raw._tok || todo.token); }
+    catch (e) { todo.error = 'Úlohu sa nepodarilo upraviť v Todoist'; }
+    loadTodoist();
+  }
 
   // Voice input (Chrome speech recognition, Slovak): every finished sentence becomes a new line in the pad
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1712,8 +1752,9 @@ html.ssmode, html.ssmode body { background: #16202c; }
     ev.preventDefault();
     micStop();
     const lines = $('padText').value.split('\n').map(x => x.trim()).filter(Boolean);
-    const input = padTarget, form = input && input.form;
+    const input = padTarget, form = input && input.form, edit = padEdit;
     closePad(); $('padText').value = '';
+    if (edit) { saveEdit(edit, lines.join(' ')); return; }
     if (!form) return;
     lines.forEach(l => { input.value = l; form.requestSubmit(); });
   });
