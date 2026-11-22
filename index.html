@@ -587,10 +587,10 @@ html.ssmode, html.ssmode body { background: #16202c; }
 <div class="lock" id="tdDlg" hidden>
   <form class="lockbox" id="tdForm">
     <h1>Todoist</h1>
-    <p>Vlož API token z Todoist (Nastavenia › Integrácie › Pre vývojárov). Uloží sa len v tomto zariadení.</p>
+    <p id="tdInfo">Vlož API token z Todoist (Nastavenia › Integrácie › Pre vývojárov). Uloží sa len v tomto zariadení.</p>
     <input id="tdToken" type="password" autocomplete="off" aria-label="Todoist API token">
-    <div class="row"><button type="submit">Pripojiť</button><button type="button" class="sec" id="tdCancel">Zrušiť</button></div>
-    <button type="button" class="sec" id="tdOff" hidden>Odpojiť Todoist</button>
+    <div class="row"><button type="submit" id="tdSubmit">Pripojiť</button><button type="button" class="sec" id="tdCancel">Zrušiť</button></div>
+    <button type="button" class="sec" id="tdOff" hidden>Odpojiť všetky Todoist účty</button>
     <p class="err" id="tdErr" aria-live="polite"></p>
   </form>
 </div>
@@ -1282,41 +1282,49 @@ html.ssmode, html.ssmode body { background: #16202c; }
 
   // ---------- to-do: Todoist when connected on this device, otherwise kept locally ----------
   const DONE_DAYS = 30;
-  const todo = { token: store.get('kal-todoist'), tasks: [], done: [], projects: {}, projectList: [], error: '' };
+  const todo = { token: store.get('kal-todoist'), tasks: [], done: [], projects: {}, projectList: [], error: '', extra: [], projTok: {}, names: {} };
+  // More Todoist accounts (e.g. Janka): their tasks are shown together with the main account's, each change goes through the owner's token
+  try { todo.extra = JSON.parse(store.get('kal-todoist-extra') || '[]') || []; } catch (e) {}
+  const tdTokens = () => todo.token ? [todo.token].concat(todo.extra.map(x => x.token)) : [];
   function syncTdBtn() { $('tdBtn').textContent = todo.token ? 'Todoist ✓' : 'Pripojiť Todoist'; }
   $('tdBtn').addEventListener('click', () => {
     $('tdErr').textContent = ''; $('tdToken').value = ''; $('tdOff').hidden = !todo.token;
+    const names = tdTokens().map(t => todo.names[t] || 'účet');
+    $('tdInfo').textContent = todo.token ? 'Pripojené: ' + names.join(', ') + '. Ďalší účet (napr. Janka) pridáš jeho API tokenom: v jej Todoist Nastavenia › Integrácie › Pre vývojárov. Jej Schránka sa ukáže ako samostatný zoznam.'
+      : 'Vlož API token z Todoist (Nastavenia › Integrácie › Pre vývojárov). Uloží sa len v tomto zariadení.';
+    $('tdSubmit').textContent = todo.token ? 'Pridať účet' : 'Pripojiť';
     $('tdDlg').hidden = false; setTimeout(() => $('tdToken').focus(), 50);
   });
   $('tdCancel').addEventListener('click', () => { $('tdDlg').hidden = true; });
   $('tdOff').addEventListener('click', () => {
-    store.del('kal-todoist'); todo.token = null; todo.tasks = []; todo.done = []; todo.error = '';
+    store.del('kal-todoist'); store.del('kal-todoist-extra'); todo.token = null; todo.extra = []; todo.tasks = []; todo.done = []; todo.error = '';
     $('tdDlg').hidden = true; syncTdBtn(); renderTasks();
   });
   $('tdForm').addEventListener('submit', async e => {
     e.preventDefault();
     const tok = $('tdToken').value.trim(); if (!tok) return;
-    const prev = todo.token; todo.token = tok;
-    try { await td('projects?limit=1'); }
-    catch (err) { todo.token = prev; $('tdErr').textContent = 'Token nefunguje, skontroluj ho.'; return; }
-    store.set('kal-todoist', tok); $('tdDlg').hidden = true; $('tdToken').value = '';
+    try { await td('projects?limit=1', null, tok); }
+    catch (err) { $('tdErr').textContent = 'Token nefunguje, skontroluj ho.'; return; }
+    if (!todo.token) { todo.token = tok; store.set('kal-todoist', tok); }
+    else if (!tdTokens().includes(tok)) { todo.extra.push({ token: tok }); store.set('kal-todoist-extra', JSON.stringify(todo.extra)); }
+    $('tdDlg').hidden = true; $('tdToken').value = '';
     syncTdBtn(); loadTodoist();
   });
   let local = [];
   try { local = JSON.parse(store.get('kal-tasks') || '[]'); } catch (e) { local = []; }
   const saveLocal = () => store.set('kal-tasks', JSON.stringify(local));
 
-  async function td(path, opts) {
+  async function td(path, opts, tok = todo.token) {
     const r = await fetch('https://api.todoist.com/api/v1/' + path, Object.assign({}, opts, {
-      headers: Object.assign({ Authorization: 'Bearer ' + todo.token }, opts && opts.body ? { 'Content-Type': 'application/json' } : {})
+      headers: Object.assign({ Authorization: 'Bearer ' + tok }, opts && opts.body ? { 'Content-Type': 'application/json' } : {})
     }));
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.status === 204 ? null : r.json().catch(() => null);
   }
-  async function tdAll(path) {
+  async function tdAll(path, tok) {
     let out = [], cursor = null;
     do {
-      const j = await td(path + '?limit=200' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+      const j = await td(path + '?limit=200' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''), null, tok);
       out = out.concat(Array.isArray(j) ? j : (j.results || []));
       cursor = j && j.next_cursor;
     } while (cursor);
@@ -1327,22 +1335,39 @@ html.ssmode, html.ssmode body { background: #16202c; }
     try {
       const since = new Date(Date.now() - DONE_DAYS * 86400000).toISOString();
       const until = new Date(Date.now() + 60000).toISOString();
-      const [tasks, projects, done] = await Promise.all([tdAll('tasks'), tdAll('projects'), tdDone(since, until)]);
+      const toks = tdTokens(), many = toks.length > 1;
+      const res = await Promise.all(toks.map((tok, i) => Promise.all([tdAll('tasks', tok), tdAll('projects', tok), tdDone(since, until, tok),
+        many && !todo.names[tok] ? td('user', null, tok).catch(() => null) : null]).then(r => ({ tok, r }), e => { if (i === 0) throw e; return { tok, err: e }; })));
+      // Shared projects and their tasks come from every account with the same id; the first account wins
+      const projects = [], tasks = [], done = [], seenP = new Set(), seenT = new Set(), seenD = new Set();
+      todo.projTok = {};
+      for (const { tok, r, err } of res) {
+        if (err) continue;
+        const [ts, ps, ds, user] = r;
+        if (user) todo.names[tok] = (user.full_name || user.email || '').split(' ')[0];
+        for (const p of ps) if (!seenP.has(p.id)) {
+          seenP.add(p.id); todo.projTok[p.id] = tok;
+          projects.push(many && (p.inbox_project || p.is_inbox_project) && todo.names[tok] ? Object.assign({}, p, { name: p.name + ' · ' + todo.names[tok] }) : p);
+        }
+        for (const t of ts) if (!seenT.has(t.id)) { seenT.add(t.id); tasks.push(Object.assign(t, { _tok: tok })); }
+        for (const t of ds) { const k = t.id || t.task_id; if (!seenD.has(k)) { seenD.add(k); done.push(Object.assign(t, { _tok: tok })); } }
+      }
       todo.projectList = projects.filter(p => !p.is_archived && !p.is_deleted);
       todo.projects = Object.fromEntries(projects.map(p => [p.id, p.name]));
       todo.tasks = tasks.filter(t => !t.checked && !t.is_deleted);
       todo.done = done;
-      todo.error = '';
+      const bad = res.filter(x => x.err).length;
+      todo.error = bad ? 'Jeden z Todoist účtov sa nepodarilo načítať' : '';
     } catch (e) {
       todo.error = 'Todoist sa nepodarilo načítať (' + e.message + ')';
     }
     renderTasks();
   }
   // Completed tasks of the last DONE_DAYS days, so finished things stay visible and can be put back
-  async function tdDone(since, until) {
+  async function tdDone(since, until, tok) {
     let out = [], cursor = null;
     do {
-      const j = await td('tasks/completed/by_completion_date?limit=200&since=' + encodeURIComponent(since) + '&until=' + encodeURIComponent(until) + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
+      const j = await td('tasks/completed/by_completion_date?limit=200&since=' + encodeURIComponent(since) + '&until=' + encodeURIComponent(until) + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''), null, tok);
       out = out.concat((j && (j.items || j.results)) || []);
       cursor = j && j.next_cursor;
     } while (cursor);
@@ -1450,7 +1475,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
       todo.tasks.push(Object.assign({}, t.raw, { checked: false }));
     }
     setTimeout(renderTasks, 300);
-    try { await td('tasks/' + t.id + (done ? '/close' : '/reopen'), { method: 'POST' }); }
+    try { await td('tasks/' + t.id + (done ? '/close' : '/reopen'), { method: 'POST' }, t.raw && t.raw._tok || todo.token); }
     catch (e) { todo.error = done ? 'Úlohu sa nepodarilo odškrtnúť v Todoist' : 'Úlohu sa nepodarilo vrátiť späť'; loadTodoist(); }
   }
   // Removing waits a few seconds so a mistaken tap can be undone
@@ -1463,7 +1488,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
     removing.delete(t.id);
     if (!todo.token) { local = local.filter(x => x !== t.src); saveLocal(); renderTasks(); return; }
     todo.done = todo.done.filter(x => (x.id || x.task_id) !== t.id);
-    td('tasks/' + t.id, { method: 'DELETE' }).catch(() => { todo.error = 'Úlohu sa nepodarilo odstrániť'; loadTodoist(); });
+    td('tasks/' + t.id, { method: 'DELETE' }, t.raw && t.raw._tok || todo.token).catch(() => { todo.error = 'Úlohu sa nepodarilo odstrániť'; loadTodoist(); });
   }
   function remove(t) {
     if (undoItem) finishRemove();
@@ -1563,7 +1588,10 @@ html.ssmode, html.ssmode body { background: #16202c; }
     if (!todo.token) { local.push({ t: v, done: false }); saveLocal(); renderTasks(); return; }
     const body = { content: v };
     if (parentId) body.parent_id = parentId; else if (projectId) body.project_id = projectId;
-    try { await td('tasks', { method: 'POST', body: JSON.stringify(body) }); }
+    // Add through the account that owns the list (Janka's Inbox only exists in her account)
+    const par = parentId && todo.tasks.find(x => x.id === parentId);
+    const tok = (par && par._tok) || (projectId && todo.projTok[projectId]) || todo.token;
+    try { await td('tasks', { method: 'POST', body: JSON.stringify(body) }, tok); }
     catch (err) { todo.error = 'Úlohu sa nepodarilo pridať do Todoist'; }
     loadTodoist();
   }
