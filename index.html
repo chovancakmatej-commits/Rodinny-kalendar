@@ -692,7 +692,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
   const WHO = Object.assign({}, WHO_DEF);
   try { Object.assign(WHO, JSON.parse(localStorage.getItem('kal-names') || '{}')); } catch (e) {}
   const IDLE_S = 45;
-  const RELOAD_MIN = 5;
+  const RELOAD_MIN = 2;
   const $ = id => document.getElementById(id);
   const hm = d => d.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' });
   const key = d => d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
@@ -1204,7 +1204,7 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     if (sameDay(selected, today)) renderDay();
   }
 
-  // ---------- calendar data (encrypted, published every 15 min by GitHub Actions) ----------
+  // ---------- calendar data (encrypted, published every 5 min via cron-job.org + GitHub Actions; the tablet checks every 2 min) ----------
   const fromB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   async function decrypt(pass, enc) {
     const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
