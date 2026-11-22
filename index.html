@@ -99,6 +99,10 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .cell.today .n { background: var(--today); color: var(--today-ink); }
 .cell.sel:not(.today) { box-shadow: inset 0 0 0 2px var(--p-work); }
 .cell .ln + .ln { margin-top: 2px; }
+.cell .evs { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 5px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; padding-bottom: 2px; }
+.cell .evs::-webkit-scrollbar { display: none; }
+.cell .evs .ln + .ln { margin-top: 0; }
+.cell .evs.over { -webkit-mask-image: linear-gradient(#000 calc(100% - 34px), transparent); mask-image: linear-gradient(#000 calc(100% - 34px), transparent); }
 .cell { gap: 5px; padding: 8px 8px 6px; }
 .cell .n { font-size: 1.3rem; width: 38px; height: 38px; }
 .ln { flex: none; font-size: .86rem; line-height: 1.3; padding: 3px 6px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; border-radius: 5px; padding: 1px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -797,12 +801,12 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
     $('grid').classList.toggle('month', month);
     $('viewWeek').classList.toggle('on', !month); $('viewMonth').classList.toggle('on', month);
     $('viewWeek').setAttribute('aria-pressed', String(!month)); $('viewMonth').setAttribute('aria-pressed', String(month));
-    const maxLines = month ? 3 : 8;
+    const maxLines = month ? 3 : Infinity;   // week view: every event, the day column scrolls
     $('grid').innerHTML = '';
     cells = [];
     for (let i = 0; i < days; i++) {
       const d = new Date(start); d.setDate(start.getDate() + i);
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'cell';
+      const b = document.createElement('div'); b.className = 'cell'; b.setAttribute('role', 'button'); b.tabIndex = 0;
       if (d < today) b.classList.add('out');
       if (month && d.getMonth() !== anchor.getMonth()) b.classList.add('other');
       if (i % 7 >= 5) b.classList.add('we');
@@ -810,17 +814,22 @@ button.link { font: inherit; font-size: .8rem; color: var(--muted); background: 
       const evs = byDay[key(d)] || [];
       const vis = sameDay(d, today) ? evs.filter(e => e.allDay || e.e > n) : evs;
       const shown = vis.slice(0, maxLines);
-      b.innerHTML = '<span class="n tnum">' + d.getDate() + '</span>' +
+      b.innerHTML = '<span class="n tnum">' + d.getDate() + '</span>' + (month ? '' : '<div class="evs">') +
         shown.map(e => '<span class="ln' + (e.imp ? ' imp' : '') + (isHl(e) ? ' hl' : '') + (isKid(e) ? ' kid' : '') + '" data-i="' + e.i + '" style="--c:' + C[e.p] + '">' + (e.allDay || !sameDay(e.s, d) ? '' : hm(e.s) + ' ') + (e.imp ? '! ' : '') + esc(e.t) + '</span>').join('') +
-        (vis.length > maxLines ? '<span class="more">+' + (vis.length - maxLines) + ' ďalšie</span>' : '');
+        (vis.length > maxLines ? '<span class="more">+' + (vis.length - maxLines) + ' ďalšie</span>' : '') + (month ? '' : '</div>');
       b.setAttribute('aria-label', d.toLocaleDateString('sk-SK', { weekday: 'long', day: 'numeric', month: 'long' }) + ', ' + evs.length + ' udalostí');
       b.addEventListener('click', ev => {
         selected = d; renderDay();
         const ln = ev.target.closest('.ln'); if (ln) openEvent(events[ln.dataset.i]);
       });
+      b.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); b.click(); } });
+      if (!month) b.lastChild.addEventListener('scroll', ev => fadeCell(ev.currentTarget), { passive: true });
       cells.push([b, d]); $('grid').appendChild(b);
     }
+    if (!month) requestAnimationFrame(() => cells.forEach(([b]) => fadeCell(b.lastChild)));
   }
+  // A day column with more events than fit: fade the bottom edge until it is scrolled to the end
+  function fadeCell(b) { b.classList.toggle('over', b.scrollHeight - b.scrollTop - b.clientHeight > 4); }
 
   function shift(dir) {
     anchor = view === 'month' ? new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1) : new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + 7 * dir);
