@@ -432,6 +432,11 @@ html.ssmode, html.ssmode body { background: #16202c; }
 .padbox { width: min(980px, 100%); margin-top: 0; }
 /* Buttons sit above the lines, so they stay visible when the on-screen keyboard covers the lower half */
 .padbox .row { order: 0; }
+.padwho { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .95rem; color: var(--muted); }
+.padwho[hidden] { display: none; }
+.padwho button { font: inherit; font-weight: 700; color: var(--ink); background: none; border: 2px solid var(--line); border-radius: 999px; padding: 6px 16px; cursor: pointer; }
+.padwho button.on { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.padwho button.on::before { content: "✓ "; }
 .padbox textarea { font: inherit; font-size: 1.8rem; line-height: 64px; height: min(40dvh, 320px); resize: none; box-sizing: border-box;
   padding: 0 18px; border-radius: 12px; border: 1px solid var(--line); color: var(--ink); -webkit-user-select: text; user-select: text;
   background: var(--panel) repeating-linear-gradient(transparent 0 63px, color-mix(in srgb, var(--p-work) 35%, transparent) 63px 64px) local; }
@@ -634,6 +639,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
 <div class="lock paddlg" id="padDlg" hidden>
   <form class="lockbox padbox" id="padForm">
     <h1 id="padTitle">Napíš perom</h1>
+    <div class="padwho" id="padWho" hidden></div>
     <p id="padHelp">Píš rovno na linajky alebo ťukni na 🎤 a povedz to. Každý riadok bude jedna úloha.</p>
     <div class="row"><button type="button" class="sec" id="padCancel">Zrušiť</button><button type="button" class="sec padmic" id="padMic" hidden>🎤 Hovoriť</button><button type="submit">Pridať</button></div>
     <textarea id="padText" rows="6" aria-labelledby="padTitle" autocomplete="off"></textarea>
@@ -1388,7 +1394,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
         !todo.names[tok] || !todo.uids[tok] ? td('user', null, tok).catch(() => null) : null]).then(r => ({ tok, r }), e => { if (i === 0) throw e; return { tok, err: e }; })));
       // Shared projects and their tasks come from every account with the same id; the first account wins
       const projects = [], tasks = [], done = [], seenP = new Set(), seenT = new Set(), seenD = new Set();
-      todo.projTok = {};
+      todo.projTok = {}; todo.projToks = {};
       const seenBy = {}, inboxes = new Set();
       for (const { r, err } of res) if (!err) for (const p of r[1]) {
         seenBy[p.id] = (seenBy[p.id] || 0) + 1;
@@ -1398,6 +1404,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
         if (err) continue;
         const [ts, ps, ds, user] = r;
         if (user) { todo.names[tok] = (user.full_name || user.email || '').split(' ')[0]; todo.uids[tok] = String(user.id || ''); }
+        for (const p of ps) (todo.projToks[p.id] = todo.projToks[p.id] || []).push(tok);
         for (const p of ps) if (!seenP.has(p.id)) {
           seenP.add(p.id); todo.projTok[p.id] = tok;
           projects.push(many && (p.inbox_project || p.is_inbox_project) && todo.names[tok] ? Object.assign({}, p, { name: p.name + ' · ' + todo.names[tok] }) : p);
@@ -1674,7 +1681,10 @@ html.ssmode, html.ssmode body { background: #16202c; }
     if (parentId) body.parent_id = parentId; else if (projectId) body.project_id = projectId;
     // Add through the account that owns the list (Janka's Inbox only exists in her account)
     const par = parentId && todo.tasks.find(x => x.id === parentId);
-    const tok = (par && par._tok) || (projectId && todo.projTok[projectId]) || todo.token;
+    let tok = (par && par._tok) || (projectId && todo.projTok[projectId]) || todo.token;
+    // Add as the person picked in the pad, when their account can see that list
+    const pid = par ? par.project_id : projectId, who = padAuthor();
+    if (who && pid && (todo.projToks[pid] || []).includes(who)) tok = who;
     try { const r = await td('tasks', { method: 'POST', body: JSON.stringify(body) }, tok); if (r && r.id && tdSeen) { tdSeen.add(String(r.id)); saveSeen(); } }
     catch (err) { todo.error = 'Úlohu sa nepodarilo pridať do Todoist'; }
     loadTodoist();
@@ -1685,8 +1695,25 @@ html.ssmode, html.ssmode body { background: #16202c; }
     padTarget = input;
     $('padTitle').textContent = input.getAttribute('aria-label') || 'Napíš perom';
     $('padText').value = input.value; input.value = ''; input.blur();
+    renderPadWho();
     $('padDlg').hidden = false;
     if (!voice) setTimeout(() => $('padText').focus(), 50);
+  }
+  // Who is adding: one button per connected account; the choice is remembered on the tablet
+  let padWhoTok = store.get('kal-pad-who') || '';
+  const padAuthor = () => tdTokens().length > 1 && tdTokens().includes(padWhoTok) ? padWhoTok : '';
+  function renderPadWho() {
+    const toks = tdTokens(), box = $('padWho');
+    box.hidden = toks.length < 2 || !!padEdit;
+    if (box.hidden) return;
+    if (!toks.includes(padWhoTok)) padWhoTok = toks[0];
+    box.innerHTML = '<span>Pridáva:</span>';
+    toks.forEach(tk => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = todo.names[tk] || 'Účet';
+      b.className = tk === padWhoTok ? 'on' : ''; b.setAttribute('aria-pressed', String(tk === padWhoTok));
+      b.addEventListener('click', () => { padWhoTok = tk; store.set('kal-pad-who', tk); renderPadWho(); });
+      box.appendChild(b);
+    });
   }
   const padHelp0 = $('padHelp').textContent, padBtn = document.querySelector('#padForm button[type=submit]');
   let padEdit = null;
@@ -1694,7 +1721,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
     padEdit = t; padTarget = null;
     $('padTitle').textContent = 'Upraviť úlohu';
     $('padHelp').textContent = 'Oprav text a ťukni na Uložiť.';
-    padBtn.textContent = 'Uložiť';
+    padBtn.textContent = 'Uložiť'; $('padWho').hidden = true;
     $('padText').value = t.t;
     $('padDlg').hidden = false;
     setTimeout(() => { const a = $('padText'); a.focus(); a.setSelectionRange(a.value.length, a.value.length); }, 50);
