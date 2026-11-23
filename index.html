@@ -345,6 +345,16 @@ html.ssmode, html.ssmode body { background: #16202c; }
   background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.20); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 10px 40px rgba(0,0,0,.25); text-shadow: none; overflow: hidden; }
 .ssnow::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--c); }
 .ssnow.none { min-width: 0; opacity: .8; }
+/* Overlapping events: a stack of cards, the later-started one on top; swipe to switch */
+.ssstack { position: relative; max-width: 100%; touch-action: pan-y; }
+.ssstack > .ssnow { z-index: 3; transition: transform .25s ease, opacity .25s ease; }
+.ssstack.multi > .ssnow { background: rgba(38,50,68,.94); }
+.ssstack > .ssnow.drag { transition: none; }
+.ssback { --c: #6f9ae0; position: absolute; left: calc(22px * var(--i)); right: calc(22px * var(--i)); top: calc(-24px * var(--i)); height: 100%; box-sizing: border-box; z-index: calc(3 - var(--i));
+  border-radius: 18px; padding: 4px 18px; text-align: left; color: #fff; font-size: .82rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: color-mix(in srgb, var(--c) 30%, rgba(30,40,56,.95)); border: 1px solid rgba(255,255,255,.2); border-top: 3px solid var(--c); opacity: calc(1 - .25 * var(--i)); cursor: pointer; }
+.ssback span { opacity: .75; font-weight: 400; }
+.ssnow .cnt { font-weight: 400; opacity: .8; margin-left: 6px; letter-spacing: .04em; }
 .ssnow.none::before { display: none; }
 .ssnow .when { flex: none; text-align: center; padding-right: 20px; border-right: 1px solid rgba(255,255,255,.18); }
 .ssnow .when b { display: block; font-family: var(--display); font-size: 2rem; line-height: 1; letter-spacing: -.02em; }
@@ -692,7 +702,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
     <div class="glass clockcard"><div class="bigclock tnum" id="ssClock"></div><div class="ssdate" id="ssDate"></div></div>
     <div class="ssrow">
       <div class="glass sswx" id="ssWx" hidden></div>
-      <div class="glass ssnow" id="ssNext"></div>
+      <div class="ssstack" id="ssStack"><div class="glass ssnow" id="ssNext"></div></div>
     </div>
     <div class="sspot" id="ssSpot" role="button" tabindex="0" aria-label="Spotify" hidden>
       <img id="spArt" alt="">
@@ -1180,29 +1190,87 @@ html.ssmode, html.ssmode body { background: #16202c; }
     const h = Math.floor(min / 60), m = min % 60;
     return h + ' h' + (m ? ' ' + m + ' min' : '');
   }
-  // Screensaver card: the event running now, otherwise the next one (today first, then the coming week)
+  // Screensaver card: the event running now, otherwise the next one (today first, then the coming week).
+  // Timed events running at the same time are a stack of cards: the later-started on top, swipe to switch.
+  let ssSel = null, ssRuns = [];
+  const evKey = e => e.t + '|' + e.s;
+  function ssCard(nx, cur, n, idx, total) {
+    const s = new Date(nx.s), dd = Math.round((midnight(s) - today) / 86400000);
+    const day = dd === 0 ? 'dnes' : dd === 1 ? 'zajtra' : s.toLocaleDateString('sk-SK', { weekday: 'long' });
+    const min = Math.max(0, Math.round(((cur ? nx.e : nx.s) - n) / 60000));
+    const pill = cur ? 'ešte ' + fmtLeft(min) : dd === 0 ? fmtIn(min) : '';
+    const where = platform(nx) || (nx.where ? nx.where.split(/[;,]/)[0] : '');
+    return '<div class="when"><b class="tnum">' + hm(s) + '</b><small>' + esc(day) + '</small></div>' +
+      '<div style="min-width:0"><div class="lbl">' + (cur ? 'Práve prebieha' : 'Najbližšia udalosť') + (total > 1 ? '<span class="cnt">' + (idx + 1) + ' z ' + total + ' · potiahni</span>' : '') + '</div>' +
+      '<div class="ttl">' + (nx.imp ? '! ' : '') + esc(nx.t) + '</div>' +
+      '<div class="meta">' + esc([hm(s) + '–' + hm(new Date(nx.e)), isKid(nx) && kidWho(nx) ? kidWho(nx) : WHO[nx.p], where].filter(Boolean).join(' · ')) + '</div></div>' +
+      (pill ? '<div class="in tnum">' + esc(pill) + '</div>' : '');
+  }
   function renderSsNext(n) {
-    const box = $('ssNext'), todays = byDay[key(today)] || [];
-    const cur = todays.filter(e => !e.allDay && e.s <= n && e.e > n).sort((a, b) => b.s - a.s)[0];
+    const box = $('ssNext'), stack = $('ssStack'), todays = byDay[key(today)] || [];
+    stack.querySelectorAll('.ssback').forEach(x => x.remove());
+    stack.classList.remove('multi'); stack.style.marginTop = '';
+    // Later start on top; same start keeps calendar order
+    const runs = todays.filter(e => !e.allDay && e.s <= n && e.e > n).map((e, i) => [e, i]).sort((a, b) => (b[0].s - a[0].s) || (a[1] - b[1])).map(x => x[0]);
+    const keys = runs.map(evKey);
+    if (keys.join() !== ssRuns.map(evKey).join()) ssSel = null;   // the set changed: start again from the newest
+    ssRuns = runs;
+    const idx = Math.max(0, keys.indexOf(ssSel));
+    const cur = runs[idx];
     const nx = cur || events.filter(e => !e.allDay && e.s > n && e.s - n < 7 * 86400000).sort((a, b) => a.s - b.s)[0];
     if (!nx) {
       box.className = 'glass ssnow none'; box.style.removeProperty('--c');
       box.innerHTML = '<div><div class="lbl">V kalendári</div><div class="meta">Najbližší týždeň nič naplánované</div></div>';
       return;
     }
-    const s = new Date(nx.s), dd = Math.round((midnight(s) - today) / 86400000);
-    const day = dd === 0 ? 'dnes' : dd === 1 ? 'zajtra' : s.toLocaleDateString('sk-SK', { weekday: 'long' });
-    const min = Math.max(0, Math.round(((cur ? nx.e : nx.s) - n) / 60000));
-    const pill = cur ? 'ešte ' + fmtLeft(min) : dd === 0 ? fmtIn(min) : '';
-    const where = platform(nx) || (nx.where ? nx.where.split(/[;,]/)[0] : '');
     box.className = 'glass ssnow';
     box.style.setProperty('--c', SSC[nx.p]);
-    box.innerHTML = '<div class="when"><b class="tnum">' + hm(s) + '</b><small>' + esc(day) + '</small></div>' +
-      '<div style="min-width:0"><div class="lbl">' + (cur ? 'Práve prebieha' : 'Najbližšia udalosť') + '</div>' +
-      '<div class="ttl">' + (nx.imp ? '! ' : '') + esc(nx.t) + '</div>' +
-      '<div class="meta">' + esc([hm(s) + '–' + hm(new Date(nx.e)), isKid(nx) && kidWho(nx) ? kidWho(nx) : WHO[nx.p], where].filter(Boolean).join(' · ')) + '</div></div>' +
-      (pill ? '<div class="in tnum">' + esc(pill) + '</div>' : '');
+    box.innerHTML = ssCard(nx, !!cur, n, idx, runs.length);
+    if (runs.length > 1) {
+      stack.classList.add('multi');
+      const behind = Math.min(2, runs.length - 1);
+      stack.style.marginTop = (24 * behind) + 'px';
+      for (let k = 1; k <= behind; k++) {
+        const e = runs[(idx + k) % runs.length], d = document.createElement('div');
+        d.className = 'ssback'; d.style.setProperty('--i', k); d.style.setProperty('--c', SSC[e.p]);
+        d.innerHTML = hm(new Date(e.s)) + '–' + hm(new Date(e.e)) + ' ' + esc(e.t) + ' <span>· ' + esc(isKid(e) && kidWho(e) ? kidWho(e) : WHO[e.p]) + '</span>';
+        stack.insertBefore(d, box);
+      }
+    }
   }
+  function ssGo(i) { if (!ssRuns.length) return; ssSel = evKey(ssRuns[(i + ssRuns.length) % ssRuns.length]); renderSsNext(new Date()); }
+  // Swipe on the stack: the top card follows the finger and goes to the back; a swipe never closes the screensaver
+  (() => {
+    const stack = $('ssStack'), box = $('ssNext');
+    let x0 = null, y0 = 0, dx = 0, swiped = false, backI = 0;
+    stack.addEventListener('pointerdown', ev => { if (ssRuns.length < 2) return; const bk = ev.target.closest && ev.target.closest('.ssback'); backI = bk ? +bk.style.getPropertyValue('--i') : 0;
+      try { stack.setPointerCapture(ev.pointerId); } catch (e) {} x0 = ev.clientX; y0 = ev.clientY; dx = 0; box.classList.add('drag'); });
+    stack.addEventListener('pointermove', ev => {
+      if (x0 === null) return;
+      dx = ev.clientX - x0;
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(ev.clientY - y0)) box.style.transform = 'translateX(' + dx + 'px) rotate(' + (dx / 40) + 'deg)';
+    });
+    const end = () => {
+      if (x0 === null) return;
+      x0 = null; box.classList.remove('drag');
+      if (Math.abs(dx) > 50) {
+        swiped = true; setTimeout(() => { swiped = false; }, 500);
+        const cur = Math.max(0, ssRuns.map(evKey).indexOf(ssSel));
+        box.style.transform = 'translateX(' + (dx > 0 ? 120 : -120) + '%)'; box.style.opacity = '0';
+        setTimeout(() => {
+          box.classList.add('drag'); box.style.transform = 'translateY(-12px)'; box.style.opacity = '0';
+          ssGo(dx > 0 ? cur - 1 : cur + 1);
+          requestAnimationFrame(() => { box.classList.remove('drag'); box.style.transform = ''; box.style.opacity = ''; });
+        }, 200);
+      } else {
+        box.style.transform = '';
+        // A tap on a card peeking out from behind brings it to the front
+        if (backI) { swiped = true; setTimeout(() => { swiped = false; }, 500); ssGo(Math.max(0, ssRuns.map(evKey).indexOf(ssSel)) + backI); }
+      }
+    };
+    stack.addEventListener('pointerup', end); stack.addEventListener('pointercancel', end);
+    stack.addEventListener('click', ev => { if (swiped) { ev.stopPropagation(); swiped = false; } }, true);
+  })();
   function renderNow(n) {
     const todays = byDay[key(today)] || [];
     // The most recently started timed event wins; an all-day "status" (vacation, cottage) is the fallback
