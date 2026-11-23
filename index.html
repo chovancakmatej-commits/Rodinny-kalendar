@@ -346,7 +346,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
 .ssnow::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--c); }
 .ssnow.none { min-width: 0; opacity: .8; }
 /* Overlapping events: a stack of cards, the later-started one on top; swipe to switch */
-.ssstack { position: relative; max-width: 100%; touch-action: pan-y; }
+.ssstack { position: relative; max-width: 100%; touch-action: none; }
 .ssstack > .ssnow { z-index: 3; transition: transform .25s ease, opacity .25s ease; }
 .ssstack.multi > .ssnow { background: rgba(38,50,68,.94); }
 .ssstack > .ssnow.drag { transition: none; }
@@ -1201,7 +1201,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
     const pill = cur ? 'ešte ' + fmtLeft(min) : dd === 0 ? fmtIn(min) : '';
     const where = platform(nx) || (nx.where ? nx.where.split(/[;,]/)[0] : '');
     return '<div class="when"><b class="tnum">' + hm(s) + '</b><small>' + esc(day) + '</small></div>' +
-      '<div style="min-width:0"><div class="lbl">' + (cur ? 'Práve prebieha' : 'Najbližšia udalosť') + (total > 1 ? '<span class="cnt">' + (idx + 1) + ' z ' + total + ' · potiahni</span>' : '') + '</div>' +
+      '<div style="min-width:0"><div class="lbl">' + (cur ? 'Práve prebieha' : 'Najbližšia udalosť') + (total > 1 ? '<span class="cnt">' + (idx + 1) + ' z ' + total + ' · potiahni dole</span>' : '') + '</div>' +
       '<div class="ttl">' + (nx.imp ? '! ' : '') + esc(nx.t) + '</div>' +
       '<div class="meta">' + esc([hm(s) + '–' + hm(new Date(nx.e)), isKid(nx) && kidWho(nx) ? kidWho(nx) : WHO[nx.p], where].filter(Boolean).join(' · ')) + '</div></div>' +
       (pill ? '<div class="in tnum">' + esc(pill) + '</div>' : '');
@@ -1247,8 +1247,8 @@ html.ssmode, html.ssmode body { background: #16202c; }
       try { stack.setPointerCapture(ev.pointerId); } catch (e) {} x0 = ev.clientX; y0 = ev.clientY; dx = 0; box.classList.add('drag'); });
     stack.addEventListener('pointermove', ev => {
       if (x0 === null) return;
-      dx = ev.clientX - x0;
-      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(ev.clientY - y0)) box.style.transform = 'translateX(' + dx + 'px) rotate(' + (dx / 40) + 'deg)';
+      dx = ev.clientY - y0;   // vertical carousel: the card follows the finger up or down
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(ev.clientX - x0)) box.style.transform = 'translateY(' + dx + 'px) scale(' + Math.max(.9, 1 - Math.abs(dx) / 1500) + ')';
     });
     const end = () => {
       if (x0 === null) return;
@@ -1256,10 +1256,10 @@ html.ssmode, html.ssmode body { background: #16202c; }
       if (Math.abs(dx) > 50) {
         swiped = true; setTimeout(() => { swiped = false; }, 500);
         const cur = Math.max(0, ssRuns.map(evKey).indexOf(ssSel));
-        box.style.transform = 'translateX(' + (dx > 0 ? 120 : -120) + '%)'; box.style.opacity = '0';
+        box.style.transform = 'translateY(' + (dx > 0 ? 110 : -110) + '%) scale(.9)'; box.style.opacity = '0';
         setTimeout(() => {
-          box.classList.add('drag'); box.style.transform = 'translateY(-12px)'; box.style.opacity = '0';
-          ssGo(dx > 0 ? cur - 1 : cur + 1);
+          box.classList.add('drag'); box.style.transform = 'translateY(' + (dx > 0 ? -30 : 30) + 'px)'; box.style.opacity = '0';
+          ssGo(dx > 0 ? cur + 1 : cur - 1);
           requestAnimationFrame(() => { box.classList.remove('drag'); box.style.transform = ''; box.style.opacity = ''; });
         }, 200);
       } else {
