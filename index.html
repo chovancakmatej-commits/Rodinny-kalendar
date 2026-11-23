@@ -213,7 +213,7 @@ h2 { font-family: var(--display); font-weight: 700; font-size: 0.8rem; text-tran
 .todohead { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
 .todohead .ttabs { min-width: 0; }
 .todohead .ttabs button { padding: 6px 10px; letter-spacing: .05em; }
-#tdBtn { flex: none; white-space: nowrap; }
+
 .ttabs { display: flex; gap: 4px; margin-bottom: 10px; }
 .ttabs button { font: inherit; font-family: var(--display); font-weight: 700; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
   color: var(--muted); background: none; border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
@@ -590,7 +590,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
   </section>
 
   <aside class="panel todo" aria-label="To-do list">
-    <div class="todohead"><div class="ttabs" role="tablist"><button type="button" role="tab" id="tabOpen">To-do</button><button type="button" role="tab" id="tabDone">Splnené</button></div><button type="button" class="link" id="tdBtn">Pripojiť Todoist</button></div>
+    <div class="todohead"><div class="ttabs" role="tablist"><button type="button" role="tab" id="tabOpen">To-do</button><button type="button" role="tab" id="tabDone">Splnené</button></div></div>
     <ul class="tasks" id="tasks"></ul>
     <form class="addrow" id="addForm">
       <input id="newTask" type="hidden" aria-label="Nová úloha">
@@ -603,6 +603,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
       <button class="ss" id="phBtn" type="button">Fotky</button>
       <button class="ss" id="slBtn" type="button">☾ Spánok</button>
       <button class="ss" id="spBtn" type="button">♫ Spotify</button>
+      <button class="ss" id="tdBtn" type="button">Todoist</button>
       <span class="note"><span id="status">Načítavam kalendár…</span> · slideshow po <span id="idleS">45</span> s nečinnosti</span>
     </div>
   </aside>
@@ -1381,7 +1382,7 @@ html.ssmode, html.ssmode body { background: #16202c; }
   // More Todoist accounts (e.g. Janka): their tasks are shown together with the main account's, each change goes through the owner's token
   try { todo.extra = JSON.parse(store.get('kal-todoist-extra') || '[]') || []; } catch (e) {}
   const tdTokens = () => todo.token ? [todo.token].concat(todo.extra.map(x => x.token)) : [];
-  function syncTdBtn() { $('tdBtn').textContent = todo.token ? '✓ Todoist' : 'Pripojiť Todoist'; }
+  function syncTdBtn() { $('tdBtn').textContent = todo.token ? '✓ Todoist' : '+ Todoist'; }
   $('tdBtn').addEventListener('click', () => {
     $('tdErr').textContent = ''; $('tdToken').value = ''; $('tdOff').hidden = !todo.token;
     const names = tdTokens().map(t => todo.names[t] || 'účet');
